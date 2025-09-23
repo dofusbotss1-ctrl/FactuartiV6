@@ -182,7 +182,7 @@ export default function PaymentModal({ isOpen, onClose, onComplete, isRenewal = 
               </button>
 
               <div className="mt-6">
-                <p className="text-sm text-gray-500">📞 Support : +212 522 123 456 • 📧 support@facturati.ma</p>
+                <p className="text-sm text-gray-500">📞 Support : +212 666 736 446 • 📧 support@facturati.ma</p>
               </div>
             </div>
           )}
