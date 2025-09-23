@@ -8,7 +8,7 @@ import OrderStatusModal from './OrderStatusModal';
 import OrderActionsGuide from './OrderActionsGuide';
 import CreateInvoiceFromOrderModal from './CreateInvoiceFromOrderModal';
 import {
-  Plus, Search, Filter, Edit, Trash2, Download, FileText,
+  Plus, Search, Filter, Edit, Trash2, FileText,
   Package, Calendar, User, DollarSign, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -74,6 +74,27 @@ export default function OrdersList() {
   const getTotalQuantity = (items: any[]) =>
     items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
+  // Vérifier si une facture existe déjà pour cette commande
+  const hasInvoiceForOrder = (orderId: string) => {
+    return invoices.some(invoice => invoice.orderId === orderId);
+  };
+
+  // NE PAS permettre la création si status = 'annule'
+  const canCreateInvoice = (order: any) => {
+    return order.clientType === 'societe'
+      && !hasInvoiceForOrder(order.id)
+      && order.status !== 'annule';
+  };
+
+  const handleCreateInvoice = (order: any) => {
+    // Défense en profondeur : empêche même si le bouton était visible par erreur.
+    if (order.status === 'annule') {
+      window.alert("Impossible de créer une facture pour une commande annulée.");
+      return;
+    }
+    setCreateForOrder(order.id);
+  };
+
   // Filtrage
   const filteredOrders = orders.filter(order => {
     const matchesSearch =
@@ -130,11 +151,6 @@ export default function OrdersList() {
     }
   };
 
-  // Vérifier si une facture existe déjà pour cette commande
-  const hasInvoiceForOrder = (orderId: string) => {
-    return invoices.some(invoice => invoice.orderId === orderId);
-  };
-
   const exportToCSV = () => {
     const csvContent = [
       ['N° Commande', 'Date', 'Client', 'Produits', 'Quantité Total', 'Total TTC', 'Statut'].join(','),
@@ -174,7 +190,6 @@ export default function OrdersList() {
           </p>
         </div>
         <div className="flex items-center space-x-3">
-        
           <Link
             to="/commandes/nouveau"
             className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg transition-all duration-200"
@@ -403,16 +418,18 @@ export default function OrdersList() {
                       >
                         <FileText className="w-4 h-4" />
                       </Link>
-                      {/* Créer facture - uniquement pour les sociétés */}
-                      {order.clientType === 'societe' && !hasInvoiceForOrder(order.id) && (
+
+                      {/* Créer facture - uniquement pour les sociétés et non annulées */}
+                      {canCreateInvoice(order) && (
                         <button
-                          onClick={() => setCreateForOrder(order.id)}
+                          onClick={() => handleCreateInvoice(order)}
                           className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 transition-colors"
                           title="Créer facture"
                         >
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
+
                       <Link
                         to={`/commandes/${order.id}/modifier`}
                         className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
