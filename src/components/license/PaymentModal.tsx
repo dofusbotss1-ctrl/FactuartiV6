@@ -36,7 +36,7 @@ export default function PaymentModal({ isOpen, onClose, onComplete, isRenewal = 
     const message = encodeURIComponent(
       `Bonjour, voici mon reçu pour l'activation ${isRenewal ? 'de renouvellement ' : ''}de mon abonnement PRO (${billingPeriod === 'monthly' ? 'mensuel' : 'annuel'}) — Montant: ${amount} MAD.`
     );
-    const whatsappUrl = `https://wa.me/212522123456?text=${message}`;
+    const whatsappUrl = `https://wa.me/212666736446?text=${message}`;
     window.open(whatsappUrl, '_blank');
     setTimeout(() => setShowConfirmation(true), 1000);
   };
