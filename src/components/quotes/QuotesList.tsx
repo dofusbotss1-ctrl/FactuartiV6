@@ -6,6 +6,8 @@ import { useLicense } from '../../contexts/LicenseContext';
 import QuoteViewer from './QuoteViewer';
 import EditQuote from './EditQuote';
 import ProTemplateModal from '../license/ProTemplateModal';
+import QuoteActionsGuide from './QuoteActionsGuide';
+
 import { Plus, Search, Filter, Download, Eye, Edit, Trash2, FileText, Crown } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 
@@ -637,6 +639,7 @@ export default function QuotesList() {
           </div>
         </div>
       )}
+       <QuoteActionsGuide />
     </div>
   );
 }

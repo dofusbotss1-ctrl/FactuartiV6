@@ -5,6 +5,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import AddClientModal from './AddClientModal';
 import EditClientModal from './EditClientModal';
 import ClientDetailView from './ClientDetailView';
+import ClientActionsGuide from './ClientActionsGuide';
 import { Plus, Search, Edit, Trash2, Phone, Mail, Eye } from 'lucide-react';
 
 export default function ClientsList() {
@@ -13,9 +14,9 @@ export default function ClientsList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<string | null>(null);
-  const [viewingClient, setViewingClient] = useState<string | null>(null); // fiche client
+  const [viewingClient, setViewingClient] = useState<string | null>(null);
 
-  // Affichage fiche client si sélectionnée
+  // Fiche client dédiée
   if (viewingClient) {
     return <ClientDetailView clientId={viewingClient} onBack={() => setViewingClient(null)} />;
   }
@@ -32,13 +33,13 @@ export default function ClientsList() {
   const getClientStats = (clientId: string) => {
     const clientInvoices = invoices.filter((invoice) => invoice.clientId === clientId);
     const totalInvoices = clientInvoices.length;
-    const totalAmount = clientInvoices.reduce((sum, invoice) => sum + Number(invoice.totalTTC || 0), 0);
+    const totalAmount = clientInvoices.reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
     const paidAmount = clientInvoices
-      .filter((invoice) => invoice.status === 'paid')
-      .reduce((sum, invoice) => sum + Number(invoice.totalTTC || 0), 0);
+      .filter((inv) => inv.status === 'paid')
+      .reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
     const pendingAmount = clientInvoices
-      .filter((invoice) => invoice.status === 'pending' || invoice.status === 'sent')
-      .reduce((sum, invoice) => sum + Number(invoice.totalTTC || 0), 0);
+      .filter((inv) => inv.status === 'pending' || inv.status === 'sent')
+      .reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
     return { totalInvoices, totalAmount, paidAmount, pendingAmount };
   };
 
@@ -51,9 +52,11 @@ export default function ClientsList() {
     const clientInvoices = invoices.filter((invoice) => invoice.clientId === clientId);
     if (clientInvoices.length === 0) return null;
     const sorted = [...clientInvoices].sort(
-      (a, b) => new Date(b.createdAt || b.invoiceDate || 0).getTime() - new Date(a.createdAt || a.invoiceDate || 0).getTime()
+      (a, b) =>
+        new Date(b.createdAt || (b as any).invoiceDate || 0).getTime() -
+        new Date(a.createdAt || (a as any).invoiceDate || 0).getTime()
     );
-    return new Date(sorted[0].createdAt || sorted[0].invoiceDate).toLocaleDateString('fr-FR');
+    return new Date(sorted[0].createdAt || (sorted[0] as any).invoiceDate).toLocaleDateString('fr-FR');
   };
 
   return (
@@ -101,7 +104,7 @@ export default function ClientsList() {
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">{client.name}</h3>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => setViewingClient(client.id)} // ouvrir fiche
+                      onClick={() => setViewingClient(client.id)}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="Voir la fiche"
                     >
@@ -180,6 +183,8 @@ export default function ClientsList() {
           client={clients.find((c) => c.id === editingClient)!}
         />
       )}
+
+      <ClientActionsGuide />
     </>
   );
 }

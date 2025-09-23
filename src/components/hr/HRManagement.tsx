@@ -23,6 +23,8 @@ import AddEmployeeModal from './AddEmployeeModal';
 import AddOvertimeModal from './AddOvertimeModal';
 import AddLeaveModal from './AddLeaveModal';
 import EditEmployeeModal from './EditEmployeeModal';
+import HrActionsGuide from "./HrActionsGuide";
+
 import html2pdf from 'html2pdf.js';
 
 export default function HRManagement() {
@@ -762,6 +764,8 @@ export default function HRManagement() {
           employee={employees.find(emp => emp.id === editingEmployee)!}
         />
       )}
+            <HrActionsGuide />
+
     </div>
   );
 }

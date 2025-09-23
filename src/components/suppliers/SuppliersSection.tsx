@@ -4,6 +4,8 @@ import { useLicense } from '../../contexts/LicenseContext';
 import SupplierDetailView from './SupplierDetailView';
 import AddSupplierModal from './AddSupplierModal';
 import EditSupplierModal from './EditSupplierModal';
+import SupplierOrderActionsGuide from './SupplierOrderActionsGuide';
+
 import { Plus, Search, Edit, Trash2, Eye, Phone, Mail, Building2, Crown, AlertTriangle } from 'lucide-react';
 
 export default function SuppliersSection() {
@@ -322,6 +324,7 @@ export default function SuppliersSection() {
           supplier={suppliers.find(s => s.id === editingSupplier)!}
         />
       )}
+            <SupplierOrderActionsGuide />
     </div>
   );
 }

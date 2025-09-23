@@ -33,6 +33,8 @@ import AddProjectModal from './AddProjectModal';
 import EditProjectModal from './EditProjectModal';
 import AddTaskModal from './AddTaskModal';
 import EditTaskModal from './EditTaskModal';
+import ProjectActionsGuide from '../projects/ProjectActionsGuide';
+
 
 export default function ProjectManagement() {
   const { user } = useAuth();
@@ -284,6 +286,7 @@ export default function ProjectManagement() {
           ) : null;
         })()
       )}
+       <ProjectActionsGuide />
     </div>
   );
 }

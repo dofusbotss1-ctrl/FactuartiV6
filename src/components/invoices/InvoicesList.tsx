@@ -8,6 +8,8 @@ import { useLicense } from '../../contexts/LicenseContext';
 import InvoiceViewer from './InvoiceViewer';
 import EditInvoice from './EditInvoice';
 import InvoiceStatusModal from './InvoiceStatusModal';
+import InvoiceActionsGuide from './InvoiceActionsGuide';
+
 import ProTemplateModal from '../license/ProTemplateModal';
 import { Plus, Search, Filter, Download, Eye, Edit, Trash2, Crown, CreditCard, FileText } from 'lucide-react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -591,6 +593,8 @@ export default function InvoicesList() {
           </p>
         </div>
       )}
+      <InvoiceActionsGuide />
+
     </div>
   );
 }
