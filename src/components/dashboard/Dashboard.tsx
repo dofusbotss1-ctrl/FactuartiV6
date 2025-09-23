@@ -62,8 +62,7 @@ export default function Dashboard() {
       '---',
       supportMsg.trim(),
       '',
-      `Envoyé depuis le Dashboard (${new Date().toLocaleString('fr-FR')})`,
-      `URL: ${typeof window !== 'undefined' ? window.location.href : ''}`
+     
     ].join('\n');
   };
 
