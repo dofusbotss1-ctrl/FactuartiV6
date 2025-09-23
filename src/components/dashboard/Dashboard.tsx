@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useData } from '../../contexts/DataContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, LifeBuoy, MessageCircle, Send, X } from 'lucide-react';
+import { LifeBuoy, MessageCircle, Send, X } from 'lucide-react';
 import StatsCards from './StatsCards';
 import RecentInvoices from './RecentInvoices';
 import TopProducts from './TopProducts';
@@ -20,7 +20,10 @@ export default function Dashboard() {
 
   const hasAnyData = invoices.length > 0 || clients.length > 0 || products.length > 0;
 
-  // Support widget state (pourquoi: UX rapide vers support)
+  // Choix de l'icône (pourquoi: permettre "message" ou "support" sans retoucher le JSX)
+  const SUPPORT_ICON: 'message' | 'support' = 'message';
+  const Glyph = SUPPORT_ICON === 'message' ? MessageCircle : LifeBuoy;
+
   const [supportOpen, setSupportOpen] = React.useState(false);
   const [supportName, setSupportName] = React.useState<string>(user?.name || '');
   const [supportMsg, setSupportMsg] = React.useState<string>('');
@@ -39,10 +42,8 @@ export default function Dashboard() {
       '---',
       supportMsg.trim(),
       '',
-      `Envoyé depuis le Dashboard (${new Date().toLocaleString('fr-FR')})`,
     ].join('\n'));
-    const url = `https://wa.me/${phone}?text=${text}`;
-    window.open(url, '_blank');
+    window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
     setSupportOpen(false);
     setSupportMsg('');
     setSupportError(null);
@@ -66,7 +67,6 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
-      {/* Message de bienvenue */}
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
         className={`rounded-xl border p-4 ${
@@ -82,7 +82,6 @@ export default function Dashboard() {
 
       <StatsCards />
 
-      {/* Quick Actions */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
         <QuickActions />
       </motion.div>
@@ -113,31 +112,29 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      {/* Recent Activity */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+        <RecentActivity />
       </motion.div>
 
       <TopProducts />
       <RecentInvoices />
 
-      {/* === Bouton Support flottant + Formulaire === */}
-      {/* Bouton flottant */}
+      {/* Bouton SUPPORT (icône dynamique) */}
       <motion.button
         aria-label="Ouvrir le support"
         onClick={() => setSupportOpen((v) => !v)}
         className="fixed bottom-6 right-6 z-50 rounded-full p-4 sm:p-5 shadow-2xl focus:outline-none focus:ring-4 focus:ring-pink-300 dark:focus:ring-pink-700
                    bg-gradient-to-br from-pink-500 via-fuchsia-600 to-purple-600 text-white"
-        animate={{ scale: [1, 1.08, 1], rotate: [0, 0, 0] }}
+        animate={{ scale: [1, 1.08, 1] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
       >
         <div className="relative">
-          <LifeBuoy className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow" />
-          {/* Pulse ring (pourquoi: attirer l'oeil) */}
+          <Glyph className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow" />
           <span className="absolute -inset-3 rounded-full bg-pink-500/20 blur-lg -z-10" />
         </div>
       </motion.button>
 
-      {/* Carte formulaire */}
+      {/* Formulaire Support */}
       <AnimatePresence>
         {supportOpen && (
           <motion.div
@@ -148,13 +145,10 @@ export default function Dashboard() {
             transition={{ type: 'spring', stiffness: 260, damping: 22 }}
             className="fixed bottom-24 right-6 z-50 w-[90vw] max-w-md"
           >
-            <div className="rounded-2xl shadow-2xl border border-pink-200/70 dark:border-pink-800/50 overflow-hidden
-                            bg-white dark:bg-gray-800">
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3
-                              bg-gradient-to-r from-pink-500 via-fuchsia-600 to-purple-600 text-white">
+            <div className="rounded-2xl shadow-2xl border border-pink-200/70 dark:border-pink-800/50 overflow-hidden bg-white dark:bg-gray-800">
+              <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-pink-500 via-fuchsia-600 to-purple-600 text-white">
                 <div className="flex items-center gap-2">
-                  <MessageCircle className="w-5 h-5" />
+                  <Glyph className="w-5 h-5" />
                   <h3 className="font-semibold">Besoin d’aide ?</h3>
                 </div>
                 <button aria-label="Fermer le support" onClick={() => setSupportOpen(false)} className="p-1.5 rounded-md hover:bg-white/10">
@@ -162,7 +156,6 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {/* Body */}
               <div className="p-4 sm:p-5">
                 <div className="space-y-3">
                   <div>
@@ -192,14 +185,12 @@ export default function Dashboard() {
                     {supportError && <p className="mt-1 text-xs text-pink-600 dark:text-pink-300">{supportError}</p>}
                   </div>
 
-                  {/* Hint */}
                   <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                    L’envoi ouvre WhatsApp avec votre message pré-rempli. Aucun frais, réponse rapide.
+                    L’envoi ouvre WhatsApp avec votre message pré-rempli.
                   </p>
                 </div>
               </div>
 
-              {/* Footer */}
               <div className="px-4 py-3 flex items-center justify-between bg-gray-50 dark:bg-gray-900/60">
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
                   <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
