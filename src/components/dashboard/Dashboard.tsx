@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useData } from '../../contexts/DataContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LifeBuoy, MessageCircle, Send, X } from 'lucide-react';
+import { LifeBuoy, MessageCircle, Send, X, Mail } from 'lucide-react';
 import StatsCards from './StatsCards';
 import RecentInvoices from './RecentInvoices';
 import TopProducts from './TopProducts';
@@ -20,21 +20,41 @@ export default function Dashboard() {
 
   const hasAnyData = invoices.length > 0 || clients.length > 0 || products.length > 0;
 
-  // Choix de l'icône (pourquoi: permettre "message" ou "support" sans retoucher le JSX)
+  // Config support
   const SUPPORT_ICON: 'message' | 'support' = 'message';
   const Glyph = SUPPORT_ICON === 'message' ? MessageCircle : LifeBuoy;
+  const SUPPORT_PHONE_E164 = '212666736446'; // 06… -> +212 sans 0
+  const SUPPORT_EMAIL = 'support@facturati.ma';
 
+  // Widget state
   const [supportOpen, setSupportOpen] = React.useState(false);
   const [supportName, setSupportName] = React.useState<string>(user?.name || '');
   const [supportMsg, setSupportMsg] = React.useState<string>('');
   const [supportError, setSupportError] = React.useState<string | null>(null);
+  const [channel, setChannel] = React.useState<'whatsapp' | 'email'>('whatsapp');
 
-  React.useEffect(() => { setSupportName(user?.name || ''); }, [user]);
+  // Toast (feedback non intrusif)
+  const [toast, setToast] = React.useState<string | null>(null);
+  const [toastType, setToastType] = React.useState<'ok' | 'warn' | 'err'>('ok');
+  React.useEffect(() => { if (user?.name) setSupportName(user.name); }, [user]);
+  React.useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(id);
+  }, [toast]);
 
-  const handleSupportSend = () => {
-    if (!supportMsg.trim()) { setSupportError('Veuillez saisir votre message.'); return; }
-    const phone = '212666736446'; // 06… -> +212… (sans le 0)
-    const text = encodeURIComponent([
+  // Helpers
+  const tryOpen = (url: string) => {
+    try {
+      const w = window.open(url, '_blank');
+      return !!w;
+    } catch {
+      return false;
+    }
+  };
+
+  const buildContextText = () => {
+    return [
       '👋 Support Facturati',
       `Nom: ${supportName || '—'}`,
       `Email: ${user?.email || '—'}`,
@@ -42,11 +62,50 @@ export default function Dashboard() {
       '---',
       supportMsg.trim(),
       '',
-    ].join('\n'));
-    window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+      `Envoyé depuis le Dashboard (${new Date().toLocaleString('fr-FR')})`,
+      `URL: ${typeof window !== 'undefined' ? window.location.href : ''}`
+    ].join('\n');
+  };
+
+  const sendEmail = () => {
+    const subject = encodeURIComponent('Support Facturati');
+    const body = encodeURIComponent(buildContextText());
+    const mailto = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+    const ok = tryOpen(mailto);
+    if (!ok) {
+      setToastType('err');
+      setToast('Impossible d’ouvrir votre client mail.');
+    } else {
+      setToastType('ok');
+      setToast('Email prêt à être envoyé.');
+    }
+  };
+
+  const sendWhatsAppWithFallback = () => {
+    const text = encodeURIComponent(buildContextText());
+    const wa = `https://wa.me/${SUPPORT_PHONE_E164}?text=${text}`;
+    const ok = tryOpen(wa);
+    if (!ok) {
+      // Fallback auto -> Email
+      setToastType('warn');
+      setToast("WhatsApp indisponible, bascule sur l'email.");
+      sendEmail();
+    } else {
+      setToastType('ok');
+      setToast('WhatsApp ouvert.');
+    }
+  };
+
+  const handleSupportSend = () => {
+    if (!supportMsg.trim()) { setSupportError('Veuillez saisir votre message.'); return; }
+    setSupportError(null);
+    if (channel === 'whatsapp') {
+      sendWhatsAppWithFallback();
+    } else {
+      sendEmail();
+    }
     setSupportOpen(false);
     setSupportMsg('');
-    setSupportError(null);
   };
 
   const getWelcomeMessage = () => {
@@ -67,6 +126,7 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
+      {/* Bienvenue */}
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
         className={`rounded-xl border p-4 ${
@@ -113,13 +173,13 @@ export default function Dashboard() {
       )}
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
-
+        <RecentActivity />
       </motion.div>
 
       <TopProducts />
       <RecentInvoices />
 
-      {/* Bouton SUPPORT (icône dynamique) */}
+      {/* === Bouton Support flottant === */}
       <motion.button
         aria-label="Ouvrir le support"
         onClick={() => setSupportOpen((v) => !v)}
@@ -134,7 +194,7 @@ export default function Dashboard() {
         </div>
       </motion.button>
 
-      {/* Formulaire Support */}
+      {/* === Carte formulaire Support === */}
       <AnimatePresence>
         {supportOpen && (
           <motion.div
@@ -146,6 +206,7 @@ export default function Dashboard() {
             className="fixed bottom-24 right-6 z-50 w-[90vw] max-w-md"
           >
             <div className="rounded-2xl shadow-2xl border border-pink-200/70 dark:border-pink-800/50 overflow-hidden bg-white dark:bg-gray-800">
+              {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-pink-500 via-fuchsia-600 to-purple-600 text-white">
                 <div className="flex items-center gap-2">
                   <Glyph className="w-5 h-5" />
@@ -156,7 +217,39 @@ export default function Dashboard() {
                 </button>
               </div>
 
+              {/* Body */}
               <div className="p-4 sm:p-5">
+                {/* Sélecteur de canal */}
+                <div className="mb-4">
+                  <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setChannel('whatsapp')}
+                      className={`px-4 py-2 text-sm font-semibold flex items-center gap-2 transition
+                        ${channel === 'whatsapp'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                      aria-pressed={channel === 'whatsapp'}
+                    >
+                      <MessageCircle className="w-4 h-4" /> WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChannel('email')}
+                      className={`px-4 py-2 text-sm font-semibold flex items-center gap-2 transition border-l border-gray-200 dark:border-gray-700
+                        ${channel === 'email'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                      aria-pressed={channel === 'email'}
+                    >
+                      <Mail className="w-4 h-4" /> Email
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                    WhatsApp recommandé. Si indisponible, bascule auto vers Email.
+                  </p>
+                </div>
+
                 <div className="space-y-3">
                   <div>
                     <label htmlFor="support-name" className="block text-xs font-medium text-gray-700 dark:text-gray-200">Votre nom</label>
@@ -184,13 +277,10 @@ export default function Dashboard() {
                     />
                     {supportError && <p className="mt-1 text-xs text-pink-600 dark:text-pink-300">{supportError}</p>}
                   </div>
-
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                    L’envoi ouvre WhatsApp avec votre message pré-rempli.
-                  </p>
                 </div>
               </div>
 
+              {/* Footer */}
               <div className="px-4 py-3 flex items-center justify-between bg-gray-50 dark:bg-gray-900/60">
                 <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
                   <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -199,15 +289,30 @@ export default function Dashboard() {
                 <motion.button
                   whileHover={{ y: -1 }} whileTap={{ scale: 0.98 }}
                   onClick={handleSupportSend}
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white
-                             bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700
-                             focus:outline-none focus:ring-2 focus:ring-green-400"
+                  className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white focus:outline-none focus:ring-2 
+                    ${channel === 'whatsapp'
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 focus:ring-green-400'
+                      : 'bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 focus:ring-indigo-400'}`}
                 >
                   <Send className="w-4 h-4" />
-                  Envoyer via WhatsApp
+                  {channel === 'whatsapp' ? 'Envoyer via WhatsApp' : 'Envoyer par Email'}
                 </motion.button>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key="toast"
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg shadow-lg text-sm
+              ${toastType === 'ok' ? 'bg-emerald-600 text-white' : toastType === 'warn' ? 'bg-amber-500 text-white' : 'bg-red-600 text-white'}`}
+          >
+            {toast}
           </motion.div>
         )}
       </AnimatePresence>
