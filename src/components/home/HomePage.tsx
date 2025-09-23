@@ -48,7 +48,7 @@ export default function HomePage() {
 
   // Toggle Mensuel/Annuel (pourquoi: prix dynamiques & note d'économie)
   const [billingPeriod, setBillingPeriod] = React.useState<'monthly' | 'annual'>('monthly');
-  const PRICES = { monthly: 299, annual: 3300 } as const;
+  const PRICES = { monthly: 300, annual: 3300 } as const;
   const monthlyTotal = PRICES.monthly * 12;
   const savings = monthlyTotal - PRICES.annual; // 3588 - 3300 = 288
   const savingsPct = Math.round((savings / monthlyTotal) * 100); // ~8%
