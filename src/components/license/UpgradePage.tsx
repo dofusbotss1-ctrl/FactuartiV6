@@ -21,7 +21,7 @@ export default function UpgradePage({ onClose, isRenewal = false }: UpgradePageP
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
 
-  const PRICES = { monthly: 299, annual: 3300 } as const;
+  const PRICES = { monthly: 300, annual: 3300 } as const;
 
   const handleUpgrade = () => setShowPaymentModal(true);
 
