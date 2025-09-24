@@ -1,5 +1,5 @@
 // src/components/invoices/InvoicesList.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
@@ -11,8 +11,19 @@ import InvoiceStatusModal from './InvoiceStatusModal';
 import InvoiceActionsGuide from './InvoiceActionsGuide';
 
 import ProTemplateModal from '../license/ProTemplateModal';
-import { Plus, Search, Filter, Download, Eye, Edit, Trash2, Crown, CreditCard, FileText } from 'lucide-react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Filter,
+  Eye,
+  Edit,
+  Trash2,
+  Crown,
+  CreditCard,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 
 export default function InvoicesList() {
@@ -20,22 +31,20 @@ export default function InvoicesList() {
   const { licenseType } = useLicense();
   const { invoices, deleteInvoice, updateInvoice } = useData();
   const { user } = useAuth();
+
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'unpaid' | 'paid' | 'collected' | 'draft'>('all');
   const [viewingInvoice, setViewingInvoice] = useState<string | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<string | null>(null);
   const [showProModal, setShowProModal] = useState(false);
   const [blockedTemplateName, setBlockedTemplateName] = useState('');
   const [showUpgradePage, setShowUpgradePage] = useState(false);
   const [statusModalInvoice, setStatusModalInvoice] = useState<string | null>(null);
-  const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({}); // auto-open handled via effect below
 
-  const toggleYearExpansion = (year: number) => {
-    setExpandedYears(prev => ({
-      ...prev,
-      [year]: !prev[year]
-    }));
-  };
+  // === Nouveau : mêmes blocs “année” que pour les devis ======================
+  const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({});
+  const toggleYearExpansion = (year: number) =>
+    setExpandedYears((prev) => ({ ...prev, [year]: !prev[year] }));
 
   const isTemplateProOnly = (templateId: string = 'template1') => {
     const proTemplates = ['template2', 'template3', 'template4', 'template5'];
@@ -44,11 +53,11 @@ export default function InvoicesList() {
 
   const getTemplateName = (templateId: string = 'template1') => {
     const templates = {
-      'template1': 'Classic Free',
-      'template2': 'Noir Classique Pro',
-      'template3': 'Moderne avec formes vertes Pro',
-      'template4': 'Bleu Élégant Pro',
-      'template5': 'Minimal Bleu Pro'
+      template1: 'Classic Free',
+      template2: 'Noir Classique Pro',
+      template3: 'Moderne avec formes vertes Pro',
+      template4: 'Bleu Élégant Pro',
+      template5: 'Minimal Bleu Pro',
     };
     return templates[templateId as keyof typeof templates] || 'Template';
   };
@@ -88,42 +97,53 @@ export default function InvoicesList() {
     }
   };
 
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = invoice.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         invoice.number.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredInvoices = useMemo(
+    () =>
+      invoices.filter((invoice: any) => {
+        const matchesSearch =
+          invoice.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          invoice.number.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      }),
+    [invoices, searchTerm, statusFilter]
+  );
 
-  // Grouper les factures par année
-  const invoicesByYear = filteredInvoices.reduce((acc, invoice) => {
-    const year = new Date(invoice.date).getFullYear();
-    if (!acc[year]) {
-      acc[year] = [];
-    }
-    acc[year].push(invoice);
-    return acc;
-  }, {} as Record<number, typeof filteredInvoices>);
+  // Groupement par année
+  const invoicesByYear = useMemo(() => {
+    return filteredInvoices.reduce((acc: Record<number, any[]>, invoice: any) => {
+      const year = new Date(invoice.date).getFullYear();
+      (acc[year] ||= []).push(invoice);
+      return acc;
+    }, {});
+  }, [filteredInvoices]);
 
   // Stats par année
-  const getYearStats = (yearInvoices: typeof filteredInvoices) => {
+  const getYearStats = (yearInvoices: any[]) => {
     const count = yearInvoices.length;
-    const totalTTC = yearInvoices.reduce((sum, invoice) => sum + invoice.totalTTC, 0);
+    const totalTTC = yearInvoices.reduce((sum, invoice) => sum + Number(invoice.totalTTC || 0), 0);
     return { count, totalTTC };
   };
 
   // Années triées desc
-  const sortedYears = Object.keys(invoicesByYear)
-    .map(Number)
-    .sort((a, b) => b - a);
+  const sortedYears = useMemo(
+    () =>
+      Object.keys(invoicesByYear)
+        .map(Number)
+        .sort((a, b) => b - a),
+    [invoicesByYear]
+  );
 
-  // ✅ Ouvrir l'année courante par défaut
-  const currentYear = new Date().getFullYear();
-  React.useEffect(() => {
-    if (sortedYears.includes(currentYear) && expandedYears[currentYear] !== true) {
-      setExpandedYears(prev => ({ ...prev, [currentYear]: true })); // auto-open once when data arrives
-    }
-  }, [sortedYears, currentYear, expandedYears]);
+  // ✅ Ouvrir **toutes** les années par défaut (comme pour les devis)
+  useEffect(() => {
+    setExpandedYears((prev) => {
+      const next = { ...prev };
+      sortedYears.forEach((y) => {
+        if (next[y] === undefined) next[y] = true;
+      });
+      return next;
+    });
+  }, [sortedYears]);
 
   const handleDeleteInvoice = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cette facture ?')) {
@@ -131,12 +151,10 @@ export default function InvoicesList() {
     }
   };
 
-  const handleViewInvoice = (id: string) => {
-    setViewingInvoice(id);
-  };
+  const handleViewInvoice = (id: string) => setViewingInvoice(id);
 
   const handleDownloadInvoice = (id: string) => {
-    const invoice = invoices.find(inv => inv.id === id);
+    const invoice = invoices.find((inv: any) => inv.id === id);
     if (invoice) {
       if (isTemplateProOnly('template1') && licenseType !== 'pro') {
         setBlockedTemplateName(getTemplateName('template1'));
@@ -164,16 +182,16 @@ export default function InvoicesList() {
       margin: [5, 5, 5, 5],
       filename: `Facture_${invoice.number}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
+      html2canvas: {
         scale: 2,
         useCORS: true,
         allowTaint: false,
         logging: false,
         backgroundColor: '#ffffff',
         width: 800,
-        height: 1200
+        height: 1200,
       },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
     };
 
     html2pdf()
@@ -189,9 +207,18 @@ export default function InvoicesList() {
   };
 
   const handleEditInvoice = (id: string) => setEditingInvoice(id);
-  const handleSaveEdit = (id: string, updatedData: any) => { updateInvoice(id, updatedData); setEditingInvoice(null); };
+  const handleSaveEdit = (id: string, updatedData: any) => {
+    updateInvoice(id, updatedData);
+    setEditingInvoice(null);
+  };
 
-  const handleUpdateStatus = (id: string, status: string, paymentMethod?: string, collectionDate?: string, collectionType?: string) => {
+  const handleUpdateStatus = (
+    id: string,
+    status: string,
+    paymentMethod?: string,
+    collectionDate?: string,
+    collectionType?: string
+  ) => {
     const updateData: any = { status };
     if (status === 'paid' && paymentMethod) updateData.paymentMethod = paymentMethod;
     if (status === 'collected' && collectionDate && collectionType) {
@@ -204,10 +231,10 @@ export default function InvoicesList() {
 
   const getPaymentMethodLabel = (method: string) => {
     const labels = {
-      'bank_transfer': 'Virement',
-      'cash': 'Espèces',
-      'check': 'Chèque',
-      'promissory_note': 'Effet'
+      bank_transfer: 'Virement',
+      cash: 'Espèces',
+      check: 'Chèque',
+      promissory_note: 'Effet',
     };
     return labels[method as keyof typeof labels] || method;
   };
@@ -215,12 +242,23 @@ export default function InvoicesList() {
   const generateTemplateHTMLWithTemplate = (invoice: any, templateId: string) => {
     let templateContent = '';
     switch (templateId) {
-      case 'template1': templateContent = generateTemplate1HTML(invoice); break;
-      case 'template2': templateContent = generateTemplate2HTML(invoice); break;
-      case 'template3': templateContent = generateTemplate3HTML(invoice); break;
-      case 'template4': templateContent = generateTemplate4HTML(invoice); break;
-      case 'template5': templateContent = generateTemplate5HTML(invoice); break;
-      default: templateContent = generateTemplate1HTML(invoice);
+      case 'template1':
+        templateContent = generateTemplate1HTML(invoice);
+        break;
+      case 'template2':
+        templateContent = generateTemplate2HTML(invoice);
+        break;
+      case 'template3':
+        templateContent = generateTemplate3HTML(invoice);
+        break;
+      case 'template4':
+        templateContent = generateTemplate4HTML(invoice);
+        break;
+      case 'template5':
+        templateContent = generateTemplate5HTML(invoice);
+        break;
+      default:
+        templateContent = generateTemplate1HTML(invoice);
     }
     const baseStyles = `
       <style>
@@ -261,14 +299,18 @@ export default function InvoicesList() {
             </tr>
           </thead>
           <tbody>
-            ${invoice.items.map((item: any) => `
+            ${invoice.items
+              .map(
+                (item: any) => `
               <tr>
                 <td style="padding:12px;border:1px solid #e5e7eb;text-align:center;">${item.description}</td>
                 <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;">${item.quantity.toFixed(3)}</td>
                 <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;">${item.unitPrice.toFixed(2)} MAD</td>
                 <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-weight:500;">${item.total.toFixed(2)} MAD</td>
               </tr>
-            `).join('')}
+            `
+              )
+              .join('')}
           </tbody>
         </table>
         <div style="display:flex;justify-content:space-between;margin:20px 0;">
@@ -316,7 +358,9 @@ export default function InvoicesList() {
           <div style="width:48%;text-align:right;">
             <p style="margin:5px 0;font-size:14px;"><strong>Facture N°:</strong> ${invoice.number}</p>
             <p style="margin:5px 0;font-size:14px;"><strong>Date:</strong> ${new Date(invoice.date).toLocaleDateString('fr-FR')}</p>
-            <p style="margin:5px 0;font-size:14px;"><strong>Échéance:</strong> ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('fr-FR') : 'À réception'}</p>
+            <p style="margin:5px 0;font-size:14px;"><strong>Échéance:</strong> ${
+              invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('fr-FR') : 'À réception'
+            }</p>
           </div>
         </div>
         <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:12px;">
@@ -329,21 +373,35 @@ export default function InvoicesList() {
             </tr>
           </thead>
           <tbody>
-            ${invoice.items.map((item: any) => `
+            ${invoice.items
+              .map(
+                (item: any) => `
               <tr>
                 <td style="padding:10px;border:1px solid #e2e8f0;">${item.description}</td>
                 <td style="padding:10px;text-align:center;border:1px solid #e2e8f0;">${item.quantity}</td>
-                <td style="padding:10px;text-align:center;border:1px solid #e2e8f0;">${item.unitPrice.toFixed(2)} MAD</td>
-                <td style="padding:10px;text-align:center;border:1px solid #e2e8f0;font-weight:bold;">${item.total.toFixed(2)} MAD</td>
+                <td style="padding:10px;text-align:center;border:1px solid #e2e8f0;">${item.unitPrice.toFixed(
+                  2
+                )} MAD</td>
+                <td style="padding:10px;text-align:center;border:1px solid #e2e8f0;font-weight:bold;">${item.total.toFixed(
+                  2
+                )} MAD</td>
               </tr>
-            `).join('')}
+            `
+              )
+              .join('')}
           </tbody>
         </table>
         <div style="margin-top:30px;">
           <div style="float:right;width:300px;background:#f8fafc;padding:20px;border:1px solid #e2e8f0;border-radius:8px;">
-            <div style="display:flex;justify-content:space-between;margin:8px 0;font-size:14px;"><span>Sous-total HT:</span><span><strong>${invoice.subtotal.toFixed(2)} MAD</strong></span></div>
-            <div style="display:flex;justify-content:space-between;margin:8px 0;font-size:14px;"><span>TVA:</span><span><strong>${invoice.totalVat.toFixed(2)} MAD</strong></span></div>
-            <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:16px;color:#059669;border-top:2px solid #059669;padding-top:10px;margin-top:10px;"><span>Total TTC:</span><span>${invoice.totalTTC.toFixed(2)} MAD</span></div>
+            <div style="display:flex;justify-content:space-between;margin:8px 0;font-size:14px;"><span>Sous-total HT:</span><span><strong>${invoice.subtotal.toFixed(
+              2
+            )} MAD</strong></span></div>
+            <div style="display:flex;justify-content:space-between;margin:8px 0;font-size:14px;"><span>TVA:</span><span><strong>${invoice.totalVat.toFixed(
+              2
+            )} MAD</strong></span></div>
+            <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:16px;color:#059669;border-top:2px solid #059669;padding-top:10px;margin-top:10px;"><span>Total TTC:</span><span>${invoice.totalTTC.toFixed(
+              2
+            )} MAD</span></div>
           </div>
           <div style="clear:both;"></div>
         </div>
@@ -353,11 +411,19 @@ export default function InvoicesList() {
         <div style="margin-top:20px;background:#fef3c7;padding:15px;border-radius:8px;border:1px solid #f59e0b;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="flex:1;"><p style="margin:0;font-size:12px;color:#92400e;"><strong>Conditions:</strong> Règlement à 30 jours. Merci de votre confiance.</p></div>
-            ${includeSignature && user?.company?.signature ? `<div style="width:120px;height:80px;border:1px solid #f59e0b;border-radius:4px;display:flex;align-items:center;justify-content:center;background:white;"><img src="${user.company.signature}" alt="Signature" style="max-height:70px;max-width:110px;object-fit:contain;" /></div>` : ``}
+            ${
+              includeSignature && user?.company?.signature
+                ? `<div style="width:120px;height:80px;border:1px solid #f59e0b;border-radius:4px;display:flex;align-items:center;justify-content:center;background:white;"><img src="${user.company.signature}" alt="Signature" style="max-height:70px;max-width:110px;object-fit:contain;" /></div>`
+                : ``
+            }
           </div>
         </div>
         <div style="margin-top:40px;padding-top:20px;border-top:1px solid #d1d5db;text-align:center;font-size:11px;color:#6b7280;">
-          <p style="margin:0;"><strong>${user?.company?.name || ''}</strong> | ${user?.company?.address || ''} | Tél: ${user?.company?.phone || ''} | Email: ${user?.company?.email || ''} | ICE: ${user?.company?.ice || ''} | IF: ${user?.company?.if || ''} | RC: ${user?.company?.rc || ''} | Patente: ${user?.company?.patente || ''}</p>
+          <p style="margin:0;"><strong>${user?.company?.name || ''}</strong> | ${user?.company?.address || ''} | Tél: ${
+      user?.company?.phone || ''
+    } | Email: ${user?.company?.email || ''} | ICE: ${user?.company?.ice || ''} | IF: ${user?.company?.if || ''} | RC: ${
+      user?.company?.rc || ''
+    } | Patente: ${user?.company?.patente || ''}</p>
         </div>
       </div>
     `;
@@ -365,6 +431,7 @@ export default function InvoicesList() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('invoices')}</h1>
         <Link
@@ -376,7 +443,7 @@ export default function InvoicesList() {
         </Link>
       </div>
 
-      {/* Filters */}
+      {/* Filtres */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
           <div className="flex-1">
@@ -393,26 +460,45 @@ export default function InvoicesList() {
               />
             </div>
           </div>
-          <div className="flex space-x-4">{/* autres filtres si besoin */}</div>
+
+          <div className="flex space-x-4">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="draft">Brouillon</option>
+              <option value="unpaid">Non payé</option>
+              <option value="paid">Payé</option>
+              <option value="collected">Encaissé</option>
+            </select>
+            <button className="inline-flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white">
+              <Filter className="w-4 h-4" />
+              <span>Filtres</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Blocs par année */}
+      {/* Blocs par année (même UX que Devis) */}
       <div className="space-y-6">
         {sortedYears.length > 0 ? (
           sortedYears.map((year) => {
             const yearInvoices = invoicesByYear[year];
             const stats = getYearStats(yearInvoices);
+            const expanded = !!expandedYears[year];
 
             return (
               <div key={year} className="space-y-4">
-                {/* Header année */}
-                <div
-                  className="bg-gradient-to-r from-teal-600 to-blue-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:from-teal-700 hover:to-blue-700 transition-all duration-200"
-                  onClick={() => toggleYearExpansion(year)}
-                >
+                {/* En-tête avec bouton Masquer/Afficher */}
+                <div className="bg-gradient-to-r from-teal-600 to-blue-600 rounded-xl shadow-lg p-6 text-white hover:from-teal-700 hover:to-blue-700 transition-all duration-200">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                    {/* Zone cliquable à gauche pour replier/afficher */}
+                    <div
+                      className="flex items-center space-x-4 cursor-pointer"
+                      onClick={() => toggleYearExpansion(year)}
+                    >
                       <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
                         <FileText className="w-6 h-6" />
                       </div>
@@ -421,58 +507,94 @@ export default function InvoicesList() {
                         <p className="text-sm opacity-90">Résumé de l'année {year}</p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-6">
-                      <div className="text-right">
-                        <div className="grid grid-cols-2 gap-6">
-                          <div className="text-center">
-                            <p className="text-3xl font-bold text-white">{stats.count}</p>
-                            <p className="text-sm opacity-90 text-white">Factures</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-3xl font-bold text-white">{stats.totalTTC.toLocaleString()}</p>
-                            <p className="text-sm opacity-90 text-white">MAD Total TTC</p>
-                          </div>
+
+                    <div className="flex items-center space-x-3">
+                      <div className="grid grid-cols-2 gap-6 text-center">
+                        <div>
+                          <p className="text-3xl font-bold text-white">{stats.count}</p>
+                          <p className="text-sm opacity-90 text-white">Factures</p>
+                        </div>
+                        <div>
+                          <p className="text-3xl font-bold text-white">
+                            {stats.totalTTC.toLocaleString()}
+                          </p>
+                          <p className="text-sm opacity-90 text-white">MAD Total TTC</p>
                         </div>
                       </div>
+
+                      {/* Bouton Masquer/Afficher */}
+                      <button
+                        onClick={() => toggleYearExpansion(year)}
+                        className="ml-2 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm"
+                        title={expanded ? 'Masquer' : 'Afficher'}
+                      >
+                        {expanded ? 'Masquer' : 'Afficher'}
+                      </button>
+
                       <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                        {expandedYears[year] ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                        {expanded ? (
+                          <ChevronDown className="w-5 h-5" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5" />
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Tableau de l'année */}
-                {expandedYears[year] && (
+                {/* Tableau repliable */}
+                {expanded && (
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Facture</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Client</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date émission</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Montant TTC</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Statut</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Facture
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Client
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Date émission
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Montant TTC
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Statut
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                          {yearInvoices.map((invoice) => (
-                            <tr key={invoice.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                          {yearInvoices.map((invoice: any) => (
+                            <tr
+                              key={invoice.id}
+                              className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900 dark:text-white">{invoice.number}</div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {invoice.number}
+                                </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div>
-                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{invoice.client.name}</div>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">ICE: {invoice.client.ice}</div>
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {invoice.client.name}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    ICE: {invoice.client.ice}
+                                  </div>
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                                 {new Date(invoice.date).toLocaleDateString('fr-FR')}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                {invoice.totalTTC.toLocaleString()} MAD
+                                {Number(invoice.totalTTC).toLocaleString()} MAD
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div>
@@ -484,7 +606,8 @@ export default function InvoicesList() {
                                   )}
                                   {invoice.status === 'collected' && (
                                     <div className="text-xs text-gray-500 mt-1">
-                                      {invoice.collectionDate && new Date(invoice.collectionDate).toLocaleDateString('fr-FR')}
+                                      {invoice.collectionDate &&
+                                        new Date(invoice.collectionDate).toLocaleDateString('fr-FR')}
                                       {invoice.collectionType && ` (${invoice.collectionType})`}
                                     </div>
                                   )}
@@ -492,16 +615,32 @@ export default function InvoicesList() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                 <div className="flex items-center space-x-3">
-                                  <button onClick={() => setStatusModalInvoice(invoice.id)} className="text-purple-600 hover:text-purple-700 transition-colors" title="Statut">
+                                  <button
+                                    onClick={() => setStatusModalInvoice(invoice.id)}
+                                    className="text-purple-600 hover:text-purple-700 transition-colors"
+                                    title="Statut"
+                                  >
                                     <CreditCard className="w-4 h-4" />
                                   </button>
-                                  <button onClick={() => handleViewInvoice(invoice.id)} className="text-blue-600 hover:text-blue-700 transition-colors" title="Voir">
+                                  <button
+                                    onClick={() => handleViewInvoice(invoice.id)}
+                                    className="text-blue-600 hover:text-blue-700 transition-colors"
+                                    title="Voir"
+                                  >
                                     <Eye className="w-4 h-4" />
                                   </button>
-                                  <button onClick={() => handleEditInvoice(invoice.id)} className="text-amber-600 hover:text-amber-700 transition-colors" title="Modifier">
+                                  <button
+                                    onClick={() => handleEditInvoice(invoice.id)}
+                                    className="text-amber-600 hover:text-amber-700 transition-colors"
+                                    title="Modifier"
+                                  >
                                     <Edit className="w-4 h-4" />
                                   </button>
-                                  <button onClick={() => handleDeleteInvoice(invoice.id)} className="text-red-600 hover:text-red-700 transition-colors" title="Supprimer">
+                                  <button
+                                    onClick={() => handleDeleteInvoice(invoice.id)}
+                                    className="text-red-600 hover:text-red-700 transition-colors"
+                                    title="Supprimer"
+                                  >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
@@ -521,7 +660,7 @@ export default function InvoicesList() {
             <p className="text-gray-500 dark:text-gray-400">Aucune facture trouvée</p>
             <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg max-w-md mx-auto">
               <p className="text-sm text-blue-800 dark:text-blue-300">
-                💡 <strong>Astuce :</strong> Le statut par défaut d'une facture est "Non payé". 
+                💡 <strong>Astuce :</strong> Le statut par défaut d'une facture est "Non payé".
                 Vous pouvez le modifier en cliquant sur le bouton Statut dans les actions.
               </p>
             </div>
@@ -532,9 +671,12 @@ export default function InvoicesList() {
       {/* Modals */}
       {viewingInvoice && (
         <InvoiceViewer
-          invoice={invoices.find(inv => inv.id === viewingInvoice)!}
+          invoice={invoices.find((inv: any) => inv.id === viewingInvoice)!}
           onClose={() => setViewingInvoice(null)}
-          onEdit={() => { setViewingInvoice(null); setEditingInvoice(viewingInvoice); }}
+          onEdit={() => {
+            setViewingInvoice(null);
+            setEditingInvoice(viewingInvoice);
+          }}
           onDownload={() => handleDownloadInvoice(viewingInvoice)}
           onUpgrade={() => setShowUpgradePage(true)}
         />
@@ -542,7 +684,7 @@ export default function InvoicesList() {
 
       {editingInvoice && (
         <EditInvoice
-          invoice={invoices.find(inv => inv.id === editingInvoice)!}
+          invoice={invoices.find((inv: any) => inv.id === editingInvoice)!}
           onSave={(updatedData) => handleSaveEdit(editingInvoice, updatedData)}
           onCancel={() => setEditingInvoice(null)}
         />
@@ -563,10 +705,19 @@ export default function InvoicesList() {
               <div className="text-center">
                 <Crown className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
                 <h3 className="text-xl font-bold mb-4">Passez à la version Pro</h3>
-                <p className="text-gray-600 mb-6">Débloquez tous les templates premium et fonctionnalités avancées !</p>
+                <p className="text-gray-600 mb-6">
+                  Débloquez tous les templates premium et fonctionnalités avancées !
+                </p>
                 <div className="flex space-x-3">
-                  <button onClick={() => setShowUpgradePage(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Fermer</button>
-                  <button className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg">Acheter Pro</button>
+                  <button
+                    onClick={() => setShowUpgradePage(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Fermer
+                  </button>
+                  <button className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2 rounded-lg">
+                    Acheter Pro
+                  </button>
                 </div>
               </div>
             </div>
@@ -578,7 +729,7 @@ export default function InvoicesList() {
         <InvoiceStatusModal
           isOpen={!!statusModalInvoice}
           onClose={() => setStatusModalInvoice(null)}
-          invoice={invoices.find(inv => inv.id === statusModalInvoice)!}
+          invoice={invoices.find((inv: any) => inv.id === statusModalInvoice)!}
           onUpdateStatus={(status, paymentMethod, collectionDate, collectionType) =>
             handleUpdateStatus(statusModalInvoice, status, paymentMethod, collectionDate, collectionType)
           }
@@ -588,13 +739,12 @@ export default function InvoicesList() {
       {invoices.length > 0 && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
           <p className="text-sm text-blue-800 dark:text-blue-300">
-            💡 <strong>Information :</strong> Le statut par défaut d'une facture est "Non payé". 
+            💡 <strong>Information :</strong> Le statut par défaut d'une facture est "Non payé".
             Vous pouvez le modifier en cliquant sur l'icône 💳 dans la colonne Actions.
           </p>
         </div>
       )}
       <InvoiceActionsGuide />
-
     </div>
   );
 }
