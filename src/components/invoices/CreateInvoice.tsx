@@ -282,23 +282,7 @@ export default function CreateInvoice() {
         
         <div className="flex space-x-3">
         
-          <label className="inline-flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includeSignature}
-              onChange={(e) => {
-                if (e.target.checked && !user?.company?.signature) {
-                  setShowSignatureModal(true);
-                  setIncludeSignature(false);
-                } else {
-                  setIncludeSignature(e.target.checked);
-                }
-              }}
-              className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-            />
-            <span className="text-sm font-medium">Ajouter ma signature électronique</span>
-          </label>
-          
+         
           <button
             onClick={handleSave}
             disabled={isLoading}
