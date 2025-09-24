@@ -196,29 +196,7 @@ export default function CreateQuote() {
         </div>
         
         <div className="flex space-x-3">
-          <button 
-            onClick={() => setShowPreview(true)}
-            className="inline-flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Eye className="w-4 h-4" />
-            <span>Aperçu</span>
-          </button>
-          <label className="inline-flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includeSignature}
-              onChange={(e) => {
-                if (e.target.checked && !user?.company?.signature) {
-                  setShowSignatureModal(true);
-                  setIncludeSignature(false);
-                } else {
-                  setIncludeSignature(e.target.checked);
-                }
-              }}
-              className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-            />
-            <span className="text-sm font-medium">Signature électronique</span>
-          </label>
+         
           <button
             onClick={handleSave}
             className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg transition-all duration-200"
