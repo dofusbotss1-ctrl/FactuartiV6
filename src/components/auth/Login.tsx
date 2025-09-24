@@ -1,6 +1,6 @@
 // src/components/auth/Login.tsx
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom'; // ⬅️ useLocation ajouté
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import {
@@ -13,7 +13,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { sendPasswordResetEmail } from 'firebase/auth';
+import { sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { auth } from '../../config/firebase';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -22,7 +22,7 @@ export default function Login() {
   // --- Lire le query param
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const openRegister = params.get('mode') === 'register'; // ⬅️ true si ?mode=register
+  const openRegister = params.get('mode') === 'register'; // true si ?mode=register
 
   // --- Login form state
   const [email, setEmail] = useState(''); // email de connexion
@@ -33,8 +33,8 @@ export default function Login() {
   const [bannerError, setBannerError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
-  // views — ⬇️ initialisé selon l’URL
-  const [showRegister, setShowRegister] = useState(openRegister); // ⬅️
+  // views — initialisé selon l’URL
+  const [showRegister, setShowRegister] = useState(openRegister);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const { login } = useAuth();
@@ -64,13 +64,30 @@ export default function Login() {
     setIsLoading(true);
     try {
       const ok = await login(email.trim(), password);
-      if (!ok) setBannerError('Email ou mot de passe incorrect.');
+
+      if (!ok) {
+        setBannerError('Email ou mot de passe incorrect.');
+      } else {
+        // ✅ Vérifier la vérification email après la connexion
+        const user = auth.currentUser;
+        if (user && !user.emailVerified) {
+          // on évite de laisser l’utilisateur connecté
+          await signOut(auth);
+          setBannerError(
+            "Votre email n'est pas encore vérifié. Veuillez vérifier votre boîte de réception et cliquer sur le lien de vérification."
+          );
+          return;
+        }
+        // Si vérifié, tout est bon : pas de bannière d’erreur
+      }
     } catch (err: any) {
       if (err?.message === 'ACCOUNT_BLOCKED_EXPIRED') {
         setBannerError(
           "Compte bloqué : l'abonnement Pro de votre entreprise a expiré. Contactez votre administrateur."
         );
-      } else setBannerError('Erreur de connexion.');
+      } else {
+        setBannerError('Erreur de connexion.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -244,9 +261,6 @@ export default function Login() {
 }
 
 /* ================== Register ================== */
-// (… le reste de ton fichier RegisterForm et ForgotPasswordForm reste identique)
-
-/* ================== Register ================== */
 
 function RegisterForm({ onBack }: { onBack: () => void }) {
   const { register } = useAuth();
@@ -322,13 +336,9 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     else if (!emailRegex.test(formData.companyEmail.trim())) fe.companyEmail = 'Email invalide.';
 
     if (!formData.ice) fe.ice = 'ICE obligatoire.';
-
     if (!formData.if) fe.if = 'IF obligatoire.';
-
     if (!formData.rc) fe.rc = 'RC obligatoire.';
-
     if (!formData.cnss) fe.cnss = 'CNSS obligatoire.';
-
     if (!formData.patente) fe.patente = 'Patente obligatoire.';
 
     if (!formData.phone) fe.phone = 'Téléphone obligatoire.';
