@@ -1,6 +1,6 @@
 // src/components/auth/Login.tsx
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation,useNavigate  } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import {
@@ -264,6 +264,8 @@ export default function Login() {
 
 function RegisterForm({ onBack }: { onBack: () => void }) {
   const { register } = useAuth();
+    const navigate = useNavigate(); // ⬅️ ajouté
+
 
   const [isLoading, setIsLoading] = useState(false);
   const [bannerError, setBannerError] = useState('');
@@ -376,7 +378,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
 
       const ok = await register(formData.email.trim(), formData.password, companyData);
       if (ok) {
-        setEmailSent(true);
+  navigate(`/verify-email?email=${encodeURIComponent(formData.email.trim())}`, { replace: true });
       } else {
         setBannerError('Erreur lors de la création du compte.');
       }
