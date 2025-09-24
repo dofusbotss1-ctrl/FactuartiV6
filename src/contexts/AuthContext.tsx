@@ -6,7 +6,7 @@ import {
   User as FirebaseUser,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  sendEmailVerification as fbSendEmailVerification, // ⬅ alias pour éviter toute confusion
+  sendEmailVerification,
   sendPasswordResetEmail,
   signOut,
   onAuthStateChanged
@@ -104,15 +104,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     shouldShowNotification: false
   });
 
-  // ———————————————————————————
-  // Helpers
-  // ———————————————————————————
-  const getActionCodeSettings = () => ({
-    // Après clic dans l’email, l’app s’ouvre sur ta page custom :
-    url: `${window.location.origin}/verify-email-success`,
-    handleCodeInApp: true,
-  });
-
   const calculateSubscriptionStatus = (userData: any) => {
     if (userData.subscription !== 'pro' || !userData.expiryDate) {
       return {
@@ -185,9 +176,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ———————————————————————————
-  // Auth state
-  // ———————————————————————————
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
@@ -196,20 +184,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userDoc = await getDoc(doc(db, 'entreprises', fbUser.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-
-            // ✅ si Firebase dit que l'email est vérifié, on synchronise Firestore
-            if (fbUser.emailVerified && userData.emailVerified !== true) {
-              try {
-                await updateDoc(doc(db, 'entreprises', fbUser.uid), {
-                  emailVerified: true,
-                  updatedAt: new Date().toISOString(),
-                });
-                userData.emailVerified = true;
-              } catch (e) {
-                console.warn('Sync emailVerified Firestore échouée:', e);
-              }
-            }
-
             setUser({
               id: fbUser.uid,
               name: userData.ownerName || fbUser.email?.split('@')[0] || 'Utilisateur',
@@ -255,12 +229,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  // ———————————————————————————
-  // Actions
-  // ———————————————————————————
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Admin “maître”
       if (email === 'admin@facturati.ma' && password === 'Rahma1211?') {
         setUser({
           id: 'facture-admin',
@@ -288,7 +258,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return true;
       }
 
-      // Utilisateur géré (managed)
       const managedUser = await checkManagedUser(email, password);
       if (managedUser) {
         const companyDoc = await getDoc(doc(db, 'entreprises', managedUser.entrepriseId));
@@ -336,7 +305,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // Compte email/password classique (propriétaire)
       await signInWithEmailAndPassword(auth, email, password);
       return true;
     } catch (error) {
@@ -347,18 +315,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string, companyData: Company): Promise<boolean> => {
     try {
-      // Création
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
-      // Langue + envoi email avec lien qui ouvre ta route custom
-      auth.languageCode = 'fr';
-      await fbSendEmailVerification(userCredential.user, getActionCodeSettings());
+      await sendEmailVerification(userCredential.user);
 
-      // 1 mois pro offert + infos société
+      // why: donner 1 MOIS Pro dès l’inscription + déclencher la Welcome modal
       const now = new Date();
       const expiry = new Date(now);
-      expiry.setMonth(expiry.getMonth() + 1);
+      expiry.setMonth(expiry.getMonth() + 1); // 1 mois calendaires
 
       await setDoc(doc(db, 'entreprises', userId), {
         ...companyData,
@@ -369,11 +334,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         subscriptionDate: now.toISOString(),
         expiryDate: expiry.toISOString(),
         createdAt: now.toISOString(),
-        updatedAt: now.toISOString(),
-        verificationEmailSentAt: now.toISOString(),
+        updatedAt: now.toISOString()
       });
 
-      // Flag front pour afficher la welcome
+      // Flag pour afficher la modal de bienvenue après redirection/connexion
       try { localStorage.setItem('welcomeProPending', '1'); } catch {}
 
       return true;
@@ -383,16 +347,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Renvoi de l'email de vérification (depuis bannière ou page dédiée)
   const sendEmailVerificationManual = async (): Promise<void> => {
     if (!firebaseUser) throw new Error('Aucun utilisateur connecté');
-    try {
-      auth.languageCode = 'fr';
-      await fbSendEmailVerification(firebaseUser, getActionCodeSettings());
-    } catch (error) {
-      console.error('Erreur envoi email vérification:', error);
-      throw error;
-    }
+    try { await sendEmailVerification(firebaseUser); } catch (error) { console.error('Erreur envoi email vérification:', error); throw error; }
   };
 
   const sendPasswordReset = async (email: string): Promise<void> => {
@@ -404,7 +361,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const currentDate = new Date();
       const expiryDate = new Date(currentDate);
-      expiryDate.setDate(currentDate.getDate() + 30);
+      expiryDate.setDate(currentDate.getDate() + 30); // ici on garde 30j
       await updateDoc(doc(db, 'entreprises', user.id), {
         subscription: 'pro',
         subscriptionDate: currentDate.toISOString(),
@@ -448,7 +405,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async (): Promise<void> => {
     try {
       if (user && !user.isAdmin) {
-        // utilisateurs gérés (pas de session Firebase)
         setUser(null);
         setFirebaseUser(null);
       } else {
@@ -486,3 +442,4 @@ export function useAuth() {
   if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
+
