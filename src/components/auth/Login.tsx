@@ -434,7 +434,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                   value={formData.rc}
                   onChange={handleChange}
                   required
-                  pattern="\d{5,}"
+                  pattern="\d{5}"
                   inputMode="numeric"
                   maxLength={20}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
