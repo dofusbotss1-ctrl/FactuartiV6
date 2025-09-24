@@ -1,32 +1,37 @@
+// src/components/dashboard/StatsCards.tsx
 import React from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { DollarSign, FileText, Users, Package, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { useOrder } from '../../contexts/OrderContext';
+import {
+  DollarSign,
+  Users,
+  Package,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ShoppingCart
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function StatsCards() {
   const { t } = useLanguage();
   const { clients, products, invoices } = useData();
+  const { orders } = useOrder();
 
   // Chiffre d'affaires total des factures créées cette année
   const currentYear = new Date().getFullYear();
-  const paidInvoices = invoices.filter(invoice => 
-    new Date(invoice.createdAt).getFullYear() === currentYear && 
-    (invoice.status === 'paid' || invoice.status === 'collected')
+  const paidInvoices = invoices.filter(
+    (invoice) =>
+      new Date(invoice.createdAt).getFullYear() === currentYear &&
+      (invoice.status === 'paid' || invoice.status === 'collected')
   );
-  
-  const totalRevenue = paidInvoices
-    .reduce((sum, invoice) => sum + invoice.totalTTC, 0);
+
+  const totalRevenue = paidInvoices.reduce((sum, invoice) => sum + invoice.totalTTC, 0);
 
   // Nombre total de factures créées cette année
-  const totalInvoicesThisYear = invoices.filter(invoice => 
-    new Date(invoice.createdAt).getFullYear() === currentYear
-  ).length;
-
-  // Factures en attente de paiement
-  const unpaidInvoices = invoices.filter(invoice => 
-    new Date(invoice.createdAt).getFullYear() === currentYear && 
-    invoice.status === 'unpaid'
+  const totalInvoicesThisYear = invoices.filter(
+    (invoice) => new Date(invoice.createdAt).getFullYear() === currentYear
   ).length;
 
   // Calcul des tendances (comparaison avec le mois précédent)
@@ -34,22 +39,32 @@ export default function StatsCards() {
   const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
   const previousMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-  const currentMonthRevenue = invoices.filter(invoice => {
-    const date = new Date(invoice.createdAt);
-    return date.getMonth() === currentMonth && 
-           date.getFullYear() === currentYear &&
-           (invoice.status === 'paid' || invoice.status === 'collected');
-  }).reduce((sum, invoice) => sum + invoice.totalTTC, 0);
+  const currentMonthRevenue = invoices
+    .filter((invoice) => {
+      const date = new Date(invoice.createdAt);
+      return (
+        date.getMonth() === currentMonth &&
+        date.getFullYear() === currentYear &&
+        (invoice.status === 'paid' || invoice.status === 'collected')
+      );
+    })
+    .reduce((sum, invoice) => sum + invoice.totalTTC, 0);
 
-  const previousMonthRevenue = invoices.filter(invoice => {
-    const date = new Date(invoice.createdAt);
-    return date.getMonth() === previousMonth && 
-           date.getFullYear() === previousMonthYear &&
-           (invoice.status === 'paid' || invoice.status === 'collected');
-  }).reduce((sum, invoice) => sum + invoice.totalTTC, 0);
+  const previousMonthRevenue = invoices
+    .filter((invoice) => {
+      const date = new Date(invoice.createdAt);
+      return (
+        date.getMonth() === previousMonth &&
+        date.getFullYear() === previousMonthYear &&
+        (invoice.status === 'paid' || invoice.status === 'collected')
+      );
+    })
+    .reduce((sum, invoice) => sum + invoice.totalTTC, 0);
 
-  const revenueTrend = previousMonthRevenue > 0 ? 
-    ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100 : 0;
+  const revenueTrend =
+    previousMonthRevenue > 0
+      ? ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+      : 0;
 
   const getTrendIcon = (trend: number) => {
     if (trend > 5) return { icon: TrendingUp, color: 'text-green-500' };
@@ -59,6 +74,7 @@ export default function StatsCards() {
 
   const trendIcon = getTrendIcon(revenueTrend);
   const TrendIcon = trendIcon.icon;
+
   const stats = [
     {
       title: 'CA Encaissé ' + currentYear,
@@ -68,17 +84,18 @@ export default function StatsCards() {
       trendLabel: `${revenueTrend > 0 ? '+' : ''}${revenueTrend.toFixed(1)}% vs mois dernier`,
       icon: DollarSign,
       bgColor: 'bg-gradient-to-br from-emerald-500 to-teal-600',
-      hoverColor: 'hover:from-emerald-600 hover:to-teal-700',
+      hoverColor: 'hover:from-emerald-600 hover:to-teal-700'
     },
+    // ⬇️ Carte mise à jour : Total Commandes (à la place de Factures Non Payées)
     {
-      title: 'Factures Non Payées',
-      value: unpaidInvoices.toString(),
-      subtitle: 'En attente de paiement',
-      trend: 0,
-      trendLabel: `${unpaidInvoices} facture${unpaidInvoices > 1 ? 's' : ''} à suivre`,
-      icon: FileText,
-      bgColor: 'bg-gradient-to-br from-red-500 to-pink-600',
-      hoverColor: 'hover:from-red-600 hover:to-pink-700',
+      title: 'Total Commandes',
+      value: orders.length.toString(),
+      subtitle: 'Commandes enregistrées',
+      trend: 0, // pas de calcul de tendance pour l’instant
+      trendLabel: `${orders.length} commande${orders.length > 1 ? 's' : ''} au total`,
+      icon: ShoppingCart,
+      bgColor: 'bg-gradient-to-br from-sky-500 to-blue-600',
+      hoverColor: 'hover:from-sky-600 hover:to-blue-700'
     },
     {
       title: 'Total Clients',
@@ -88,7 +105,7 @@ export default function StatsCards() {
       trendLabel: `Base de données clients`,
       icon: Users,
       bgColor: 'bg-gradient-to-br from-violet-500 to-purple-600',
-      hoverColor: 'hover:from-violet-600 hover:to-purple-700',
+      hoverColor: 'hover:from-violet-600 hover:to-purple-700'
     },
     {
       title: 'Total Produits',
@@ -98,17 +115,15 @@ export default function StatsCards() {
       trendLabel: `Catalogue produits`,
       icon: Package,
       bgColor: 'bg-gradient-to-br from-orange-500 to-red-600',
-      hoverColor: 'hover:from-orange-600 hover:to-red-700',
-    },
+      hoverColor: 'hover:from-orange-600 hover:to-red-700'
+    }
   ];
 
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
+      transition: { staggerChildren: 0.1 }
     }
   };
 
@@ -118,14 +133,12 @@ export default function StatsCards() {
       opacity: 1,
       y: 0,
       scale: 1,
-      transition: {
-        duration: 0.5,
-        ease: 'easeOut'
-      }
+      transition: { duration: 0.5, ease: 'easeOut' }
     }
   };
+
   return (
-    <motion.div 
+    <motion.div
       className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
       variants={containerVariants}
       initial="hidden"
@@ -133,13 +146,12 @@ export default function StatsCards() {
     >
       {stats.map((stat, index) => {
         const Icon = stat.icon;
-        
         return (
-          <motion.div 
-            key={index} 
-            className={`bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group`}
+          <motion.div
+            key={index}
+            className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-xl transition-all duration-300 cursor-pointer group"
             variants={cardVariants}
-            whileHover={{ 
+            whileHover={{
               scale: 1.05,
               y: -8,
               transition: { type: 'spring', stiffness: 300 }
@@ -149,10 +161,8 @@ export default function StatsCards() {
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600 mb-1">
-                    {stat.title}
-                  </p>
-                  <motion.p 
+                  <p className="text-sm font-medium text-gray-600 mb-1">{stat.title}</p>
+                  <motion.p
                     className="text-3xl font-bold text-gray-900 dark:text-white mb-2"
                     initial={{ scale: 0.8 }}
                     animate={{ scale: 1 }}
@@ -160,23 +170,21 @@ export default function StatsCards() {
                   >
                     {stat.value}
                   </motion.p>
-                  <p className="text-xs text-gray-500">
-                    {stat.subtitle}
-                  </p>
-                  {/* Indicateur de tendance */}
-                  {stat.trend !== 0 && (
+                  <p className="text-xs text-gray-500">{stat.subtitle}</p>
+
+                  {stat.trend !== 0 ? (
                     <div className="flex items-center space-x-1 mt-2">
                       <TrendIcon className={`w-3 h-3 ${trendIcon.color}`} />
                       <span className={`text-xs font-medium ${trendIcon.color}`}>
                         {stat.trendLabel}
                       </span>
                     </div>
-                  )}
-                  {stat.trend === 0 && (
+                  ) : (
                     <p className="text-xs text-gray-400 mt-2">{stat.trendLabel}</p>
                   )}
                 </div>
-                <motion.div 
+
+                <motion.div
                   className={`w-14 h-14 ${stat.bgColor} ${stat.hoverColor} rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300`}
                   whileHover={{ rotate: [0, -10, 10, 0] }}
                   transition={{ duration: 0.5 }}
@@ -185,8 +193,7 @@ export default function StatsCards() {
                 </motion.div>
               </div>
             </div>
-            
-            {/* Barre de progression animée en bas */}
+
             <div className="h-1 bg-gray-100 dark:bg-gray-800">
               <motion.div
                 className={`h-full ${stat.bgColor.replace('bg-gradient-to-br', 'bg-gradient-to-r')}`}
