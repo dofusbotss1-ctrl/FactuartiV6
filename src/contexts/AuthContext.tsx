@@ -6,10 +6,11 @@ import {
   User as FirebaseUser,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  sendEmailVerification,
+  sendEmailVerification as fbSendEmailVerification,
   sendPasswordResetEmail,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  ActionCodeSettings,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -89,6 +90,19 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/** Base URL pour la redirection après vérif email */
+const BASE_URL =
+  import.meta.env.VITE_PUBLIC_BASE_URL ||
+  (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+    ? `http://${location.hostname}:5173`
+    : window.location.origin);
+
+/** ActionCodeSettings pour la vérification d’email (continueUrl personnalisée) */
+const getActionCodeSettings = (): ActionCodeSettings => ({
+  url: `${BASE_URL}/verify-email-success?mode=verifyEmail`,
+  handleCodeInApp: true,
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -184,6 +198,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userDoc = await getDoc(doc(db, 'entreprises', fbUser.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
+
+            // Synchroniser Firestore si l’email vient d’être vérifié
+            if (fbUser.emailVerified && userData.emailVerified !== true) {
+              try {
+                await updateDoc(doc(db, 'entreprises', fbUser.uid), {
+                  emailVerified: true,
+                  updatedAt: new Date().toISOString(),
+                });
+                (userData as any).emailVerified = true;
+              } catch (e) {
+                console.warn('Sync emailVerified Firestore échouée:', e);
+              }
+            }
+
             setUser({
               id: fbUser.uid,
               name: userData.ownerName || fbUser.email?.split('@')[0] || 'Utilisateur',
@@ -318,12 +346,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
-      await sendEmailVerification(userCredential.user);
+      // envoyer la vérification avec redirection personnalisée
+      auth.languageCode = 'fr';
+      await fbSendEmailVerification(userCredential.user, getActionCodeSettings());
 
-      // why: donner 1 MOIS Pro dès l’inscription + déclencher la Welcome modal
+      // 1 mois pro offert
       const now = new Date();
       const expiry = new Date(now);
-      expiry.setMonth(expiry.getMonth() + 1); // 1 mois calendaires
+      expiry.setMonth(expiry.getMonth() + 1);
 
       await setDoc(doc(db, 'entreprises', userId), {
         ...companyData,
@@ -334,10 +364,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         subscriptionDate: now.toISOString(),
         expiryDate: expiry.toISOString(),
         createdAt: now.toISOString(),
-        updatedAt: now.toISOString()
+        updatedAt: now.toISOString(),
+        verificationEmailSentAt: now.toISOString(),
       });
 
-      // Flag pour afficher la modal de bienvenue après redirection/connexion
       try { localStorage.setItem('welcomeProPending', '1'); } catch {}
 
       return true;
@@ -349,7 +379,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const sendEmailVerificationManual = async (): Promise<void> => {
     if (!firebaseUser) throw new Error('Aucun utilisateur connecté');
-    try { await sendEmailVerification(firebaseUser); } catch (error) { console.error('Erreur envoi email vérification:', error); throw error; }
+    try {
+      auth.languageCode = 'fr';
+      await fbSendEmailVerification(firebaseUser, getActionCodeSettings());
+    } catch (error) {
+      console.error('Erreur envoi email vérification:', error);
+      throw error;
+    }
   };
 
   const sendPasswordReset = async (email: string): Promise<void> => {
@@ -361,7 +397,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const currentDate = new Date();
       const expiryDate = new Date(currentDate);
-      expiryDate.setDate(currentDate.getDate() + 30); // ici on garde 30j
+      expiryDate.setDate(currentDate.getDate() + 30);
       await updateDoc(doc(db, 'entreprises', user.id), {
         subscription: 'pro',
         subscriptionDate: currentDate.toISOString(),
@@ -442,5 +478,3 @@ export function useAuth() {
   if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
-
-
