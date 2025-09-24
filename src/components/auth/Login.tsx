@@ -314,19 +314,14 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     else if (!emailRegex.test(formData.companyEmail.trim())) fe.companyEmail = 'Email invalide.';
 
     if (!formData.ice) fe.ice = 'ICE obligatoire.';
-    else if (!/^\d{15}$/.test(formData.ice)) fe.ice = '15 chiffres requis.';
 
     if (!formData.if) fe.if = 'IF obligatoire.';
-    else if (!/^\d{4}$/.test(formData.if)) fe.if = '8 chiffres requis.';
 
     if (!formData.rc) fe.rc = 'RC obligatoire.';
-    else if (!/^\d{2}$/.test(formData.rc)) fe.rc = '5 chiffres minimum.';
 
     if (!formData.cnss) fe.cnss = 'CNSS obligatoire.';
-    else if (!/^\d{5}$/.test(formData.cnss)) fe.cnss = '7 chiffres requis.';
 
     if (!formData.patente) fe.patente = 'Patente obligatoire.';
-    else if (!/^\d{5}$/.test(formData.patente)) fe.patente = '8 chiffres requis.';
 
     if (!formData.phone) fe.phone = 'Téléphone obligatoire.';
     else if (!/^(\+212|0)[5-7]\d{8}$/.test(formData.phone.replace(/\s/g, '')))
