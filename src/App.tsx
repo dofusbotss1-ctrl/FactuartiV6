@@ -43,6 +43,7 @@ import CreateOrder from './components/orders/CreateOrder';
 import OrderDetail from './components/orders/OrderDetail';
 import EditOrder from './components/orders/EditOrder';
 import EmailVerificationPage from './components/auth/EmailVerificationPage';
+import EmailVerificationSuccessPage from './components/auth/EmailVerificationSuccessPage';
 import { SupplierProvider } from './contexts/SupplierContext';
 
 
