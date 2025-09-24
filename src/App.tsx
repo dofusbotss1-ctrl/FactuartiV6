@@ -42,7 +42,9 @@ import OrdersList from './components/orders/OrdersList';
 import CreateOrder from './components/orders/CreateOrder';
 import OrderDetail from './components/orders/OrderDetail';
 import EditOrder from './components/orders/EditOrder';
+import EmailVerificationPage from './components/auth/EmailVerificationPage';
 import { SupplierProvider } from './contexts/SupplierContext';
+
 
 function AppContent() {
   const { user, isAuthenticated, showExpiryAlert, setShowExpiryAlert, expiredDate, subscriptionStatus } = useAuth();
