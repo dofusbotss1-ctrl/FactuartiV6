@@ -41,19 +41,21 @@ export default function QuotesList() {
   const [blockedTemplateName, setBlockedTemplateName] = useState('');
   const [showUpgradePage, setShowUpgradePage] = useState(false);
 
-  // Groupes par année
+  // groupement par année
   const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({});
   const toggleYearExpansion = (year: number) =>
     setExpandedYears((p) => ({ ...p, [year]: !p[year] }));
 
-  // Modal de conversion
+  // état du modal de conversion
   const [convertModalQuoteId, setConvertModalQuoteId] = useState<string | null>(null);
   const [accessApproved, setAccessApproved] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [alreadyMsg, setAlreadyMsg] = useState<string | null>(null);
 
-  // ---- helpers ----
+  // ✅ Fallback local : on mémorise les devis convertis immédiatement
+  const [localConverted, setLocalConverted] = useState<Set<string>>(new Set());
+
   const isTemplateProOnly = (templateId: string = 'template1') => {
     const proTemplates = ['template2', 'template3', 'template4', 'template5'];
     return proTemplates.includes(templateId);
@@ -111,7 +113,7 @@ export default function QuotesList() {
     }
   };
 
-  // Filtres
+  // filtres
   const filteredQuotes = quotes.filter((q) => {
     const matchesSearch =
       q.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -120,7 +122,7 @@ export default function QuotesList() {
     return matchesSearch && matchesStatus;
   });
 
-  // Groupement par année
+  // groupement
   const quotesByYear = filteredQuotes.reduce((acc, q) => {
     const y = new Date(q.date).getFullYear();
     (acc[y] ||= []).push(q);
@@ -137,7 +139,7 @@ export default function QuotesList() {
     .map(Number)
     .sort((a, b) => b - a);
 
-  // Ouvrir année courante par défaut
+  // ouvrir année courante
   const currentYear = new Date().getFullYear();
   useEffect(() => {
     if (sortedYears.includes(currentYear) && expandedYears[currentYear] !== true) {
@@ -145,23 +147,23 @@ export default function QuotesList() {
     }
   }, [sortedYears, currentYear, expandedYears]);
 
-  // Actions de base
+  // actions simples
   const handleDeleteQuote = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce devis ?')) deleteQuote(id);
   };
   const handleViewQuote = (id: string) => setViewingQuote(id);
   const handleEditQuote = (id: string) => setEditingQuote(id);
 
-  // -------- Conversion ----------
+  // ---- logique "déjà converti" (inclut fallback local) ----
   const isAlreadyConverted = (q: any) =>
     Boolean(q?.invoiceId) || Boolean(q?.converted) || q?.status === 'converted';
 
   const handleRequestConvert = (id: string) => {
     const q = quotes.find((x) => x.id === id);
     if (!q) return;
-    if (isAlreadyConverted(q)) {
+    if (isAlreadyConverted(q) || localConverted.has(id)) {
       setAlreadyMsg('La facture est déjà créée pour ce devis.');
-      setTimeout(() => setAlreadyMsg(null), 3000);
+      setTimeout(() => setAlreadyMsg(null), 2500);
       return;
     }
     setAccessApproved(false);
@@ -172,12 +174,41 @@ export default function QuotesList() {
     if (!convertModalQuoteId || !accessApproved) return;
     setIsConverting(true);
     try {
-      await convertQuoteToInvoice(convertModalQuoteId);
+      // 1) créer la facture
+      const result = await convertQuoteToInvoice(convertModalQuoteId);
+
+      // 2) récupérer un éventuel id retourné (string ou objet {id})
+      let invoiceId: string | undefined;
+      if (typeof result === 'string') invoiceId = result;
+      else if (result && typeof result === 'object' && 'id' in result) {
+        // @ts-ignore
+        invoiceId = result.id as string;
+      }
+
+      // 3) marquer le devis converti dans la source de vérité (si DataContext permet)
+      try {
+        await updateQuote(convertModalQuoteId, {
+          converted: true,
+          status: 'converted',
+          ...(invoiceId ? { invoiceId } : {}),
+        });
+      } catch {
+        // ignore si pas supporté
+      }
+
+      // 4) fallback immédiat côté UI
+      setLocalConverted((prev) => {
+        const n = new Set(prev);
+        n.add(convertModalQuoteId!);
+        return n;
+      });
+
+      // 5) animation succès
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
         setConvertModalQuoteId(null);
-      }, 1400);
+      }, 1200);
     } catch (e) {
       console.error(e);
       alert('Erreur lors de la création de la facture.');
@@ -321,7 +352,8 @@ export default function QuotesList() {
                           </thead>
                           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {yearQuotes.map((quote) => {
-                              const already = isAlreadyConverted(quote);
+                              const already =
+                                isAlreadyConverted(quote) || localConverted.has(quote.id);
                               return (
                                 <tr
                                   key={quote.id}
@@ -372,7 +404,7 @@ export default function QuotesList() {
                                         <Edit className="w-4 h-4" />
                                       </button>
 
-                                      {/* Bouton Convertir caché si déjà converti */}
+                                      {/* Convertir : MASQUÉ si déjà converti */}
                                       {!already ? (
                                         <button
                                           onClick={() => handleRequestConvert(quote.id)}
@@ -494,7 +526,7 @@ export default function QuotesList() {
 
       <QuoteActionsGuide />
 
-      {/* ======= MODAL Convertir en facture (amélioré dark mode) ======= */}
+      {/* ======= MODAL Convertir en facture (dark mode + fallback) ======= */}
       <AnimatePresence>
         {convertModalQuoteId && (
           <motion.div
@@ -523,7 +555,8 @@ export default function QuotesList() {
                     (q.totalTTC ?? 0) - (q.subtotal ?? items.reduce((s: number, it: any) => s + Number(it.total || 0), 0))
                   );
                 const totalTTC = q.totalTTC ?? subtotal + totalVat;
-                const already = isAlreadyConverted(q);
+                const already =
+                  isAlreadyConverted(q) || localConverted.has(convertModalQuoteId);
 
                 return (
                   <>
@@ -650,7 +683,7 @@ export default function QuotesList() {
                         </div>
                       </div>
 
-                      {/* Message déjà facturé (sécurité si ouvert quand même) */}
+                      {/* Message déjà facturé */}
                       {already && (
                         <div className="rounded-xl p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 text-sm text-yellow-800 dark:text-yellow-200">
                           Ce devis est déjà converti en facture.
@@ -667,7 +700,7 @@ export default function QuotesList() {
                         Annuler
                       </button>
 
-                      {/* Bouton caché / désactivé si déjà converti */}
+                      {/* Bouton masqué si already */}
                       {!already && (
                         <motion.button
                           whileHover={{ scale: accessApproved ? 1.02 : 1 }}
