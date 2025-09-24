@@ -126,6 +126,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />
+            <Route path="/verify-email" element={<EmailVerificationPage />} /> {/* ⬅️ ajouté */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
