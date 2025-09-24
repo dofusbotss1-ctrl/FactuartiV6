@@ -419,7 +419,6 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                   value={formData.if}
                   onChange={handleChange}
                   required
-                  maxLength={8}
                   inputMode="numeric"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="12345678"
