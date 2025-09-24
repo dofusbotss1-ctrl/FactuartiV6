@@ -135,6 +135,7 @@ function AppContent() {
     );
   }
 
+  
   // Si c'est l'admin de facture.ma, afficher le dashboard admin
   if (user?.email === 'admin@facturati.ma') {
     return (
