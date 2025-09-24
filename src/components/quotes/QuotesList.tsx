@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// src/components/quotes/QuotesList.tsx
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
@@ -8,12 +9,10 @@ import QuoteViewer from './QuoteViewer';
 import EditQuote from './EditQuote';
 import ProTemplateModal from '../license/ProTemplateModal';
 import QuoteActionsGuide from './QuoteActionsGuide';
-
 import {
   Plus,
   Search,
   Filter,
-  Download,
   Eye,
   Edit,
   Trash2,
@@ -21,17 +20,21 @@ import {
   Crown,
   ChevronDown,
   ChevronRight,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
-import html2pdf from 'html2pdf.js';
+import { AnimatePresence, motion } from 'framer-motion';
 
 export default function QuotesList() {
-  const { t } = useLanguage();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { licenseType } = useLicense();
   const { quotes, deleteQuote, convertQuoteToInvoice, updateQuote } = useData();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'>('all');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
+  >('all');
 
   const [viewingQuote, setViewingQuote] = useState<string | null>(null);
   const [editingQuote, setEditingQuote] = useState<string | null>(null);
@@ -39,27 +42,33 @@ export default function QuotesList() {
   const [blockedTemplateName, setBlockedTemplateName] = useState('');
   const [showUpgradePage, setShowUpgradePage] = useState(false);
 
-  // ⬇️ Gestion ouverture/fermeture des blocs par année (comme Factures)
+  // Bloc par année
   const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({});
   const toggleYearExpansion = (year: number) =>
-    setExpandedYears((prev) => ({ ...prev, [year]: !prev[year] }));
+    setExpandedYears((p) => ({ ...p, [year]: !p[year] }));
 
+  // Convert modal states
+  const [convertModalQuoteId, setConvertModalQuoteId] = useState<string | null>(null);
+  const [accessApproved, setAccessApproved] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [alreadyMsg, setAlreadyMsg] = useState<string | null>(null);
+
+  // --------- Helpers ----------
   const isTemplateProOnly = (templateId: string = 'template1') => {
     const proTemplates = ['template2', 'template3', 'template4', 'template5'];
     return proTemplates.includes(templateId);
   };
-
   const getTemplateName = (templateId: string = 'template1') => {
-    const templates: Record<string, string> = {
+    const m: Record<string, string> = {
       template1: 'Classic Free',
       template2: 'Noir Classique Pro',
       template3: 'Moderne avec formes vertes Pro',
       template4: 'Bleu Élégant Pro',
       template5: 'Minimal Bleu Pro',
     };
-    return templates[templateId] || 'Template';
+    return m[templateId] || 'Template';
   };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'accepted':
@@ -92,12 +101,18 @@ export default function QuotesList() {
             Expiré
           </span>
         );
+      case 'converted':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-800">
+            Converti
+          </span>
+        );
       default:
         return null;
     }
   };
 
-  // Filtre recherche/statut
+  // Filtres
   const filteredQuotes = quotes.filter((q) => {
     const matchesSearch =
       q.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -106,21 +121,19 @@ export default function QuotesList() {
     return matchesSearch && matchesStatus;
   });
 
-  // Grouper par année (comme Factures)
-  const quotesByYear = filteredQuotes.reduce((acc, quote) => {
-    const year = new Date(quote.date).getFullYear();
-    (acc[year] ||= []).push(quote);
+  // Groupement par année
+  const quotesByYear = filteredQuotes.reduce((acc, q) => {
+    const y = new Date(q.date).getFullYear();
+    (acc[y] ||= []).push(q);
     return acc;
   }, {} as Record<number, typeof filteredQuotes>);
 
-  // Stats par année
-  const getYearStats = (yearQuotes: typeof filteredQuotes) => {
-    const count = yearQuotes.length;
-    const totalTTC = yearQuotes.reduce((sum, q) => sum + (q.totalTTC || 0), 0);
+  const getYearStats = (list: typeof filteredQuotes) => {
+    const count = list.length;
+    const totalTTC = list.reduce((s, q) => s + (q.totalTTC || 0), 0);
     return { count, totalTTC };
   };
 
-  // Tri desc des années
   const sortedYears = Object.keys(quotesByYear)
     .map(Number)
     .sort((a, b) => b - a);
@@ -129,246 +142,57 @@ export default function QuotesList() {
   const currentYear = new Date().getFullYear();
   useEffect(() => {
     if (sortedYears.includes(currentYear) && expandedYears[currentYear] !== true) {
-      setExpandedYears((prev) => ({ ...prev, [currentYear]: true }));
+      setExpandedYears((p) => ({ ...p, [currentYear]: true }));
     }
   }, [sortedYears, currentYear, expandedYears]);
 
+  // --------- Actions basic ----------
   const handleDeleteQuote = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce devis ?')) deleteQuote(id);
   };
   const handleViewQuote = (id: string) => setViewingQuote(id);
   const handleEditQuote = (id: string) => setEditingQuote(id);
 
-  const handleConvertToInvoice = (id: string) => {
-    if (window.confirm('Voulez-vous convertir ce devis en facture ?')) {
-      convertQuoteToInvoice(id);
-      alert('Devis converti en facture avec succès !');
-    }
-  };
+  // --------- Convert with modal ----------
+  const handleRequestConvert = (id: string) => {
+    const q = quotes.find((x) => x.id === id);
+    if (!q) return;
 
-  const handleDownloadQuote = (id: string) => {
-    const quote = quotes.find((q) => q.id === id);
-    if (!quote) return;
-    if (isTemplateProOnly('template1') && licenseType !== 'pro') {
-      setBlockedTemplateName(getTemplateName('template1'));
-      setShowProModal(true);
+    const alreadyConverted =
+      Boolean((q as any).invoiceId) || Boolean((q as any).converted) || q.status === 'converted';
+
+    if (alreadyConverted) {
+      setAlreadyMsg('La facture est déjà créée pour ce devis.');
+      setTimeout(() => setAlreadyMsg(null), 3000);
       return;
     }
-    downloadQuotePDF(quote, 'template1');
+    setAccessApproved(false);
+    setConvertModalQuoteId(id);
   };
 
-  // ====== Génération PDF ======
-  const downloadQuotePDF = (quote: any, templateId: string = 'template1') => {
-    const tempDiv = document.createElement('div');
-    tempDiv.style.position = 'fixed';
-    tempDiv.style.top = '0';
-    tempDiv.style.left = '0';
-    tempDiv.style.width = '210mm';
-    tempDiv.style.minHeight = '297mm';
-    tempDiv.style.backgroundColor = 'white';
-    tempDiv.style.zIndex = '-1';
-    tempDiv.style.opacity = '0';
-    tempDiv.innerHTML = generateSimpleQuoteHTML(quote, false);
-    document.body.appendChild(tempDiv);
-
-    const options = {
-      margin: [5, 5, 5, 5],
-      filename: `Devis_${quote.number}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: false,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        width: 800,
-        height: 1200,
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    };
-
-    html2pdf()
-      .set(options)
-      .from(tempDiv)
-      .save()
-      .then(() => document.body.removeChild(tempDiv))
-      .catch((error) => {
-        console.error('Erreur lors de la génération du PDF:', error);
-        if (document.body.contains(tempDiv)) document.body.removeChild(tempDiv);
-        alert('Erreur lors de la génération du PDF');
-      });
-  };
-
-  const generateTemplateHTMLWithTemplate = (quote: any, templateId: string) => {
-    let templateContent = '';
-    switch (templateId) {
-      case 'template1':
-        templateContent = generateTemplate1HTML(quote);
-        break;
-      case 'template2':
-      case 'template3':
-      case 'template4':
-      case 'template5':
-        templateContent = generateTemplate1HTML(quote);
-        break;
-      default:
-        templateContent = generateTemplate1HTML(quote);
+  const confirmConvert = async () => {
+    if (!convertModalQuoteId || !accessApproved) return;
+    setIsConverting(true);
+    try {
+      await convertQuoteToInvoice(convertModalQuoteId);
+      setShowSuccess(true);
+      // petite pause pour l’animation
+      setTimeout(() => {
+        setShowSuccess(false);
+        setConvertModalQuoteId(null);
+      }, 1500);
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la création de la facture.");
+    } finally {
+      setIsConverting(false);
     }
-    const baseStyles = `
-      <style>
-        @page { size: A4; margin: 15mm; }
-        @media print {
-          body { margin:0; -webkit-print-color-adjust: exact; color-adjust: exact; print-color-adjust: exact; }
-          .no-print { display: none !important; }
-        }
-        body { font-family: Arial, sans-serif; line-height: 1.5; color: #333; margin: 0; padding: 0; font-size: 14px; background: white; max-width: 800px; margin: 0 auto; }
-      </style>
-    `;
-    return `<!doctype html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Devis ${quote.number}</title>${baseStyles}</head><body>${templateContent}</body></html>`;
   };
 
-  const generateTemplate1HTML = (quote: any) => {
-    return `
-      <div style="padding:20px;font-family:Arial,sans-serif;background:white;">
-        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #d1d5db;">
-          <div>
-            <h2 style="margin:0 0 8px 0;font-size:20px;color:#1f2937;font-weight:bold;">${quote.client.name || 'Entreprise'}</h2>
-            <p style="margin:2px 0;font-size:12px;">${quote.client.address || ''}</p>
-            <p style="margin:2px 0;font-size:12px;">${quote.client.phone || ''}</p>
-            <div style="margin-top:8px;font-size:11px;color:#6b7280;"><p style="margin:1px 0;">ICE: ${quote.client.ice || ''}</p></div>
-          </div>
-          <div style="text-align:right;">
-            <h1 style="margin:0 0 8px 0;font-size:28px;color:#7c3aed;font-weight:bold;">DEVIS</h1>
-            <p style="margin:2px 0;font-size:12px;"><strong>N°:</strong> ${quote.number}</p>
-            <p style="margin:2px 0;font-size:12px;"><strong>Date:</strong> ${new Date(quote.date).toLocaleDateString('fr-FR')}</p>
-            <p style="margin:2px 0;font-size:12px;"><strong>Valide jusqu'au:</strong> ${new Date(quote.validUntil).toLocaleDateString('fr-FR')}</p>
-          </div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:12px;">
-          <thead>
-            <tr style="background:#f3f4f6;">
-              <th style="padding:12px;text-align:left;border:1px solid #e5e7eb;font-weight:bold;">DÉSIGNATION</th>
-              <th style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-weight:bold;">QUANTITÉ</th>
-              <th style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-weight:bold;">P.U. HT</th>
-              <th style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-weight:bold;">TOTAL HT</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${quote.items
-              .map(
-                (item: any) => `
-              <tr>
-                <td style="padding:12px;border:1px solid #e5e7eb;text-align:center;">${item.description}</td>
-                <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;">${Number(item.quantity).toFixed(3)}</td>
-                <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;">${Number(item.unitPrice).toFixed(2)} MAD</td>
-                <td style="padding:12px;text-align:center;border:1px solid #e5e7eb;font-weight:500;">${Number(item.total).toFixed(2)} MAD</td>
-              </tr>`
-              )
-              .join('')}
-          </tbody>
-        </table>
-        <div style="display:flex;justify-content:space-between;margin:20px 0;">
-          <div style="width:45%;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:15px;">
-            <p style="font-size:14px;font-weight:bold;text-align:center;margin-bottom:10px;">Arrêtée le présent devis à la somme de :</p>
-            <p style="font-size:14px;margin:0;">• ${quote.totalInWords}</p>
-          </div>
-          <div style="width:45%;background:#f9fafb;padding:15px;border-radius:8px;border:1px solid #e5e7eb;">
-            <div style="display:flex;justify-content:space-between;margin:4px 0;font-size:14px;"><span>Sous-total HT:</span><span><strong>${Number(quote.subtotal).toFixed(2)} MAD</strong></span></div>
-            <div style="display:flex;justify-content:space-between;margin:4px 0;font-size:14px;"><span>TVA:</span><span><strong>${Number(quote.totalVat).toFixed(2)} MAD</strong></span></div>
-            <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:16px;color:#7c3aed;border-top:1px solid #d1d5db;padding-top:8px;margin-top:8px;"><span>Total TTC:</span><span>${Number(quote.totalTTC).toFixed(2)} MAD</span></div>
-          </div>
-        </div>
-        <div style="margin-top:30px;text-align:center;color:#6b7280;border-top:1px solid #e5e7eb;padding-top:15px;font-size:10px;">
-          <p><strong>Conditions:</strong> Ce devis est valable jusqu'au ${new Date(quote.validUntil).toLocaleDateString('fr-FR')}</p>
-          <p style="margin-top:8px;">Merci de votre confiance !</p>
-        </div>
-      </div>
-    `;
-  };
-
-  const generateSimpleQuoteHTML = (quote: any, includeSignature: boolean = false) => {
-    return `
-      <div style="padding:20px;font-family:Arial,sans-serif;background:white;width:100%;min-height:297mm;">
-        <div style="text-align:center;margin-bottom:30px;border-bottom:2px solid #7c3aed;padding-bottom:20px;">
-          <h1 style="font-size:32px;color:#7c3aed;margin:0;font-weight:bold;">DEVIS</h1>
-          <h2 style="font-size:24px;color:#1f2937;margin:10px 0;font-weight:bold;">${user?.company?.name || ''}</h2>
-          <p style="font-size:14px;color:#6b7280;margin:5px 0;">${user?.company?.address || ''}</p>
-          <p style="font-size:14px;color:#6b7280;margin:5px 0;">Tél: ${user?.company?.phone || ''} | Email: ${user?.company?.email || ''}</p>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:30px;">
-          <div style="width:48%;">
-            <h3 style="font-size:16px;font-weight:bold;color:#1f2937;margin-bottom:10px;border-bottom:1px solid #d1d5db;padding-bottom:5px;">CLIENT:</h3>
-            <p style="margin:5px 0;font-size:14px;font-weight:bold;">${quote.client.name}</p>
-            <p style="margin:5px 0;font-size:12px;">${quote.client.address || ''}</p>
-            <p style="margin:5px 0;font-size:12px;">ICE: ${quote.client.ice}</p>
-            <p style="margin:5px 0;font-size:12px;">Tél: ${quote.client.phone || ''}</p>
-            <p style="margin:5px 0;font-size:12px;">Email: ${quote.client.email || ''}</p>
-          </div>
-          <div style="width:48%;text-align:right;">
-            <p style="margin:5px 0;font-size:14px;"><strong>Devis N°:</strong> ${quote.number}</p>
-            <p style="margin:5px 0;font-size:14px;"><strong>Date:</strong> ${new Date(quote.date).toLocaleDateString('fr-FR')}</p>
-            <p style="margin:5px 0;font-size:14px;"><strong>Valide jusqu'au:</strong> ${new Date(quote.validUntil).toLocaleDateString('fr-FR')}</p>
-          </div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:12px;">
-          <thead>
-            <tr style="background:#f8fafc;">
-              <th style="padding:12px;text-align:left;border:1px solid #e2e8f0;font-weight:bold;">DESCRIPTION</th>
-              <th style="padding:12px;text-align:center;border:1px solid #e2e8f0;font-weight:bold;">QTÉ</th>
-              <th style="padding:12px;text-align:center;border:1px solid #e2e8f0;font-weight:bold;">PRIX UNIT.</th>
-              <th style="padding:12px;text-align:center;border:1px solid #e2e8f0;font-weight:bold;">TOTAL HT</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${quote.items
-              .map(
-                (item: any) => `
-              <tr>
-                <td style="padding:10px;border:1px solid #e2e8f0;">${item.description}</td>
-                <td style="padding:10px;text-align:center;border:1px solid #e2e8f0;">${item.quantity}</td>
-                <td style="padding:10px;text-align:center;border:1px solid #e2e8f0;">${Number(item.unitPrice).toFixed(2)} MAD</td>
-                <td style="padding:10px;text-align:center;border:1px solid #e2e8f0;font-weight:bold;">${Number(item.total).toFixed(2)} MAD</td>
-              </tr>`
-              )
-              .join('')}
-          </tbody>
-        </table>
-        <div style="margin-top:30px;">
-          <div style="float:right;width:300px;background:#f8fafc;padding:20px;border:1px solid #e2e8f0;border-radius:8px;">
-            <div style="display:flex;justify-content:space-between;margin:8px 0;font-size:14px;"><span>Sous-total HT:</span><span><strong>${Number(quote.subtotal).toFixed(2)} MAD</strong></span></div>
-            <div style="display:flex;justify-content:space-between;margin:8px 0;font-size:14px;"><span>TVA:</span><span><strong>${Number(quote.totalVat).toFixed(2)} MAD</strong></span></div>
-            <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:16px;color:#7c3aed;border-top:2px solid #7c3aed;padding-top:10px;margin-top:10px;"><span>Total TTC:</span><span>${Number(quote.totalTTC).toFixed(2)} MAD</span></div>
-          </div>
-          <div style="clear:both;"></div>
-        </div>
-        <div style="margin-top:30px;background:#f0f9ff;padding:15px;border-radius:8px;border:1px solid #0ea5e9;">
-          <p style="margin:0;font-size:14px;font-weight:bold;color:#0c4a6e;">Arrêtée le présent devis à la somme de: ${quote.totalInWords}</p>
-        </div>
-        <div style="margin-top:20px;background:#fef3c7;padding:15px;border-radius:8px;border:1px solid #f59e0b;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="flex:1;"><p style="margin:0;font-size:12px;color:#92400e;"><strong>Conditions:</strong> Ce devis est valable jusqu'au ${new Date(quote.validUntil).toLocaleDateString('fr-FR')}. Prix fermes et non révisables. Règlement à 30 jours.</p></div>
-            ${
-              includeSignature && user?.company?.signature
-                ? `<div style="width:120px;height:80px;border:1px solid #f59e0b;border-radius:4px;display:flex;align-items:center;justify-content:center;background:white;"><img src="${user.company.signature}" alt="Signature" style="max-height:70px;max-width:110px;object-fit:contain;" /></div>`
-                : ``
-            }
-          </div>
-        </div>
-        <div style="margin-top:40px;padding-top:20px;border-top:1px solid #d1d5db;text-align:center;font-size:11px;color:#6b7280;">
-          <p style="margin:0;"><strong>${user?.company?.name || ''}</strong> | ${user?.company?.address || ''} | Tél: ${user?.company?.phone || ''} | Email: ${user?.company?.email || ''} | ICE: ${user?.company?.ice || ''} | IF: ${user?.company?.if || ''} | RC: ${user?.company?.rc || ''} | Patente: ${user?.company?.patente || ''}</p>
-        </div>
-      </div>
-    `;
-  };
-
-  const handleSaveEdit = (id: string, updatedData: any) => {
-    updateQuote(id, updatedData);
-    setEditingQuote(null);
-  };
-
+  // ============================== RENDER ==============================
   return (
     <div className="space-y-6">
-      {/* Header + bouton créer */}
+      {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Devis</h1>
         <Link
@@ -397,7 +221,6 @@ export default function QuotesList() {
               />
             </div>
           </div>
-
           <div className="flex space-x-4">
             <select
               value={statusFilter}
@@ -411,7 +234,6 @@ export default function QuotesList() {
               <option value="rejected">Refusé</option>
               <option value="expired">Expiré</option>
             </select>
-
             <button className="inline-flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white">
               <Filter className="w-4 h-4" />
               <span>Filtres</span>
@@ -420,16 +242,14 @@ export default function QuotesList() {
         </div>
       </div>
 
-      {/* Blocs par année (comme Factures) */}
+      {/* Blocs par année */}
       <div className="space-y-6">
         {sortedYears.length > 0 ? (
           sortedYears.map((year) => {
             const yearQuotes = quotesByYear[year];
             const stats = getYearStats(yearQuotes);
-
             return (
               <div key={year} className="space-y-4">
-                {/* Header année */}
                 <div
                   className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all duration-200"
                   onClick={() => toggleYearExpansion(year)}
@@ -466,7 +286,6 @@ export default function QuotesList() {
                   </div>
                 </div>
 
-                {/* Tableau de l'année */}
                 {expandedYears[year] && (
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
                     <div className="overflow-x-auto">
@@ -540,20 +359,17 @@ export default function QuotesList() {
                                   >
                                     <Edit className="w-4 h-4" />
                                   </button>
+
+                                  {/* ⚠️ Bouton Télécharger retiré */}
+                                  {/* Convertir en facture -> ouvre le formulaire animé */}
                                   <button
-                                    onClick={() => handleDownloadQuote(quote.id)}
-                                    className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-                                    title="Télécharger"
-                                  >
-                                    <Download className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleConvertToInvoice(quote.id)}
+                                    onClick={() => handleRequestConvert(quote.id)}
                                     className="text-purple-600 hover:text-purple-700 transition-colors"
                                     title="Convertir en facture"
                                   >
                                     <FileText className="w-4 h-4" />
                                   </button>
+
                                   <button
                                     onClick={() => handleDeleteQuote(quote.id)}
                                     className="text-red-600 hover:text-red-700 transition-colors"
@@ -578,15 +394,15 @@ export default function QuotesList() {
             <p className="text-gray-500 dark:text-gray-400">Aucun devis trouvé</p>
             <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg max-w-md mx-auto">
               <p className="text-sm text-purple-800 dark:text-purple-300">
-                💡 <strong>Astuce :</strong> vous pouvez convertir un devis accepté en facture via l’icône{' '}
-                <span className="inline-flex align-middle"><FileText className="w-4 h-4 inline ml-1" /></span> dans la colonne Actions.
+                💡 <strong>Astuce :</strong> Un devis “Accepté” peut être converti en facture via
+                l’icône <FileText className="w-4 h-4 inline" /> dans la colonne Actions.
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Modals */}
+      {/* Modals existants */}
       {viewingQuote && (
         <QuoteViewer
           quote={quotes.find((q) => q.id === viewingQuote)!}
@@ -595,7 +411,7 @@ export default function QuotesList() {
             setViewingQuote(null);
             setEditingQuote(viewingQuote);
           }}
-          onDownload={() => handleDownloadQuote(viewingQuote)}
+          // onDownload supprimé de la liste, mais conservé dans le viewer si besoin
           onUpgrade={() => setShowUpgradePage(true)}
         />
       )}
@@ -603,7 +419,10 @@ export default function QuotesList() {
       {editingQuote && (
         <EditQuote
           quote={quotes.find((q) => q.id === editingQuote)!}
-          onSave={(updatedData) => handleSaveEdit(editingQuote, updatedData)}
+          onSave={(updatedData) => {
+            updateQuote(editingQuote, updatedData);
+            setEditingQuote(null);
+          }}
           onCancel={() => setEditingQuote(null)}
         />
       )}
@@ -643,18 +462,250 @@ export default function QuotesList() {
         </div>
       )}
 
-      {/* Bandeau d'info */}
+      {/* Info bar */}
       {quotes.length > 0 && (
         <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
           <p className="text-sm text-purple-800 dark:text-purple-300">
-            💡 <strong>Information :</strong> Mettez à jour le statut d’un devis (Envoyé, Accepté, …) depuis la page du
-            devis. Un devis “Accepté” peut être converti en facture via l’icône <FileText className="w-4 h-4 inline" />.
+            💡 <strong>Information :</strong> Mettez à jour le statut d’un devis (Envoyé, Accepté, …) depuis sa page.
+            Convertissez-le ensuite en facture via l’icône <FileText className="w-4 h-4 inline" />.
           </p>
         </div>
       )}
 
       <QuoteActionsGuide />
+
+      {/* ======= Convert Modal (Form + Animations) ======= */}
+      <AnimatePresence>
+        {convertModalQuoteId && (
+          <motion.div
+            className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl shadow-xl overflow-hidden"
+              initial={{ y: 40, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 40, opacity: 0, scale: 0.98 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 240 }}
+            >
+              {(() => {
+                const q = quotes.find((x) => x.id === convertModalQuoteId)!;
+                const items = q.items || [];
+                const subtotal =
+                  q.subtotal ??
+                  items.reduce((s: number, it: any) => s + Number(it.total || 0), 0);
+                const totalVat =
+                  q.totalVat ??
+                  Math.max(
+                    0,
+                    (q.totalTTC ?? 0) - (q.subtotal ?? items.reduce((s: number, it: any) => s + Number(it.total || 0), 0))
+                  );
+                const totalTTC = q.totalTTC ?? subtotal + totalVat;
+
+                return (
+                  <>
+                    <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                          Convertir en facture
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          Vérifiez les informations avant de créer la facture.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setConvertModalQuoteId(null)}
+                        className="rounded-lg px-3 py-1.5 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      >
+                        Fermer
+                      </button>
+                    </div>
+
+                    <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-auto">
+                      {/* Client */}
+                      <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                        <p className="text-xs text-gray-500">Client</p>
+                        <p className="text-base font-semibold text-gray-900 dark:text-white">
+                          {q.client?.name}
+                        </p>
+                        {q.client?.ice && (
+                          <p className="text-xs text-gray-500 mt-1">ICE : {q.client.ice}</p>
+                        )}
+                      </div>
+
+                      {/* Lignes */}
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                          Articles
+                        </p>
+                        <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-gray-600 dark:text-gray-300">
+                                  Produit / Désignation
+                                </th>
+                                <th className="px-4 py-2 text-center text-gray-600 dark:text-gray-300">
+                                  Quantité
+                                </th>
+                                <th className="px-4 py-2 text-center text-gray-600 dark:text-gray-300">
+                                  PU HT
+                                </th>
+                                <th className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">
+                                  Total HT
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((it: any, idx: number) => (
+                                <tr
+                                  key={idx}
+                                  className="border-t border-gray-100 dark:border-gray-800"
+                                >
+                                  <td className="px-4 py-2">{it.description}</td>
+                                  <td className="px-4 py-2 text-center">
+                                    {Number(it.quantity).toFixed(3)}
+                                  </td>
+                                  <td className="px-4 py-2 text-center">
+                                    {Number(it.unitPrice).toFixed(2)} MAD
+                                  </td>
+                                  <td className="px-4 py-2 text-right font-medium">
+                                    {Number(it.total).toFixed(2)} MAD
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Totaux */}
+                      <div className="grid sm:grid-cols-3 gap-4">
+                        <div className="rounded-xl bg-gray-50 dark:bg-gray-800 p-4">
+                          <p className="text-xs text-gray-500">Montant HT</p>
+                          <p className="text-lg font-semibold">
+                            {Number(subtotal).toFixed(2)} MAD
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-gray-50 dark:bg-gray-800 p-4">
+                          <p className="text-xs text-gray-500">TVA</p>
+                          <p className="text-lg font-semibold">
+                            {Number(totalVat).toFixed(2)} MAD
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-gray-50 dark:bg-gray-800 p-4">
+                          <p className="text-xs text-gray-500">Total TTC</p>
+                          <p className="text-lg font-semibold text-purple-600 dark:text-purple-400">
+                            {Number(totalTTC).toFixed(2)} MAD
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Accès Oui/Non */}
+                      <div className="flex items-center justify-between rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
+                            Accès
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Activez “Oui” pour autoriser la création de la facture.
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => setAccessApproved(false)}
+                            className={`px-4 py-2 rounded-lg border ${
+                              !accessApproved
+                                ? 'bg-gray-900 text-white border-gray-900'
+                                : 'border-gray-300'
+                            }`}
+                          >
+                            Non
+                          </button>
+                          <button
+                            onClick={() => setAccessApproved(true)}
+                            className={`px-4 py-2 rounded-lg border ${
+                              accessApproved
+                                ? 'bg-green-600 text-white border-green-600'
+                                : 'border-gray-300'
+                            }`}
+                          >
+                            Oui
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-6 py-5 border-t border-gray-200 dark:border-gray-800 flex items-center justify-end space-x-3">
+                      <button
+                        onClick={() => setConvertModalQuoteId(null)}
+                        className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        disabled={isConverting}
+                      >
+                        Annuler
+                      </button>
+                      <motion.button
+                        whileHover={{ scale: accessApproved ? 1.02 : 1 }}
+                        whileTap={{ scale: accessApproved ? 0.98 : 1 }}
+                        onClick={confirmConvert}
+                        disabled={!accessApproved || isConverting}
+                        className={`px-4 py-2 rounded-lg text-white ${
+                          accessApproved
+                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
+                            : 'bg-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        {isConverting ? 'Création…' : 'Créer la facture'}
+                      </motion.button>
+                    </div>
+
+                    {/* Animation succès */}
+                    <AnimatePresence>
+                      {showSuccess && (
+                        <motion.div
+                          className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                        >
+                          <motion.div
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.8, opacity: 0 }}
+                            className="text-center"
+                          >
+                            <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto" />
+                            <p className="mt-3 text-lg font-semibold text-gray-900 dark:text-white">
+                              Facture créée avec succès !
+                            </p>
+                          </motion.div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </>
+                );
+              })()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast : déjà créée */}
+      <AnimatePresence>
+        {alreadyMsg && (
+          <motion.div
+            className="fixed bottom-6 right-6 z-[80] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg px-4 py-3 flex items-center space-x-3"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 20, opacity: 0 }}
+          >
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
+            <span className="text-sm text-gray-800 dark:text-gray-200">{alreadyMsg}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-
