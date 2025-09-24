@@ -1,6 +1,6 @@
 // src/components/auth/Login.tsx
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom'; // ⬅️ useLocation ajouté
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import {
@@ -19,17 +19,22 @@ import { auth } from '../../config/firebase';
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Login() {
+  // --- Lire le query param
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const openRegister = params.get('mode') === 'register'; // ⬅️ true si ?mode=register
+
   // --- Login form state
   const [email, setEmail] = useState(''); // email de connexion
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [bannerError, setBannerError] = useState(''); // bandeau global
-  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({}); // erreurs inline
+  const [bannerError, setBannerError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
-  // views
-  const [showRegister, setShowRegister] = useState(false);
+  // views — ⬇️ initialisé selon l’URL
+  const [showRegister, setShowRegister] = useState(openRegister); // ⬅️
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const { login } = useAuth();
@@ -237,6 +242,9 @@ export default function Login() {
     </div>
   );
 }
+
+/* ================== Register ================== */
+// (… le reste de ton fichier RegisterForm et ForgotPasswordForm reste identique)
 
 /* ================== Register ================== */
 
