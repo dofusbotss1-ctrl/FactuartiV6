@@ -25,7 +25,47 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-/* --- Petit composant feu d’artifice sans dépendances externes --- */
+/* === Toast (message court) ======================== */
+function Toast({
+  show,
+  onClose,
+  title,
+  desc,
+}: {
+  show: boolean;
+  onClose: () => void;
+  title: string;
+  desc?: string;
+}) {
+  useEffect(() => {
+    if (!show) return;
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [show, onClose]);
+
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 30, opacity: 0 }}
+          className="fixed bottom-5 right-5 z-[95] rounded-xl bg-white/95 dark:bg-gray-900/95 border border-gray-200 dark:border-gray-700 shadow-xl px-4 py-3 flex items-start space-x-3"
+        >
+          <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5" />
+          <div>
+            <p className="font-semibold text-gray-900 dark:text-white">{title}</p>
+            {desc ? (
+              <p className="text-sm text-gray-600 dark:text-gray-300">{desc}</p>
+            ) : null}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/* === Feu d’artifice (overlay succès) ============== */
 function FireworksOverlay({
   show,
   onDone,
@@ -43,7 +83,6 @@ function FireworksOverlay({
 
   useEffect(() => {
     if (!show) return;
-    // 3 salves * 24 particules
     const bursts = 3;
     const per = 24;
     const arr: typeof particles = [];
@@ -58,7 +97,7 @@ function FireworksOverlay({
           x: 0,
           y: 0,
           dx: Math.cos(angle) * speed,
-          dy: Math.sin(angle) * speed - 40, // petit arc
+          dy: Math.sin(angle) * speed - 40,
           delay,
         });
       }
@@ -77,7 +116,6 @@ function FireworksOverlay({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      {/* couche d'animation */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {particles.map((p) => (
           <motion.span
@@ -89,26 +127,19 @@ function FireworksOverlay({
               opacity: [0, 1, 1, 0],
               scale: [0.8, 1, 1, 0.9],
             }}
-            transition={{
-              delay: p.delay / 1000,
-              duration: 1.4,
-              ease: 'easeOut',
-            }}
+            transition={{ delay: p.delay / 1000, duration: 1.4, ease: 'easeOut' }}
             className="absolute block rounded-full"
             style={{
               width: 8,
               height: 8,
               background:
-                ['#22c55e', '#0ea5e9', '#f59e0b', '#a855f7', '#ef4444'][
-                  p.id % 5
-                ],
+                ['#22c55e', '#0ea5e9', '#f59e0b', '#a855f7', '#ef4444'][p.id % 5],
               boxShadow: '0 0 12px rgba(255,255,255,0.6)',
             }}
           />
         ))}
       </div>
 
-      {/* panneau centré */}
       <motion.div
         initial={{ y: 20, opacity: 0, scale: 0.98 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -118,9 +149,7 @@ function FireworksOverlay({
       >
         <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto mb-3" />
         <p className="text-xl font-semibold text-gray-900 dark:text-white">{message}</p>
-        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-          Fermeture automatique…
-        </p>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Fermeture automatique…</p>
       </motion.div>
     </motion.div>
   );
@@ -130,7 +159,7 @@ export default function QuotesList() {
   const { t } = useLanguage();
   const { licenseType } = useLicense();
 
-  // ⬇️ on récupère AUSSI les factures pour détecter la suppression
+  // ⚠️ on a besoin de invoices pour savoir si une facture existe encore
   const { quotes, invoices, deleteQuote, convertQuoteToInvoice, updateQuote } = useData();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -144,20 +173,23 @@ export default function QuotesList() {
   const [blockedTemplateName, setBlockedTemplateName] = useState('');
   const [showUpgradePage, setShowUpgradePage] = useState(false);
 
-  // groupement par année
+  // Groupement par année (ouvert par défaut)
   const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({});
   const toggleYearExpansion = (year: number) =>
     setExpandedYears((p) => ({ ...p, [year]: !p[year] }));
 
-  // état du modal de conversion
+  // Modal de conversion
   const [convertModalQuoteId, setConvertModalQuoteId] = useState<string | null>(null);
   const [accessApproved, setAccessApproved] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
 
-  // succès “fermeture modal + overlay feu d’artifice 5s”
+  // Succès création
   const [showFireworks, setShowFireworks] = useState(false);
 
-  // Fallback local : masquer bouton tout de suite
+  // Toast “déjà créé”
+  const [showAlreadyToast, setShowAlreadyToast] = useState(false);
+
+  // Cache local pour masquer la latence de mise à jour
   const [localConverted, setLocalConverted] = useState<Set<string>>(new Set());
 
   const isTemplateProOnly = (templateId: string = 'template1') => {
@@ -218,7 +250,7 @@ export default function QuotesList() {
     }
   };
 
-  // ——— Filtres & groupements ———
+  // Filtres & groupements
   const filteredQuotes = useMemo(
     () =>
       quotes.filter((q: any) => {
@@ -245,39 +277,35 @@ export default function QuotesList() {
     return { count, totalTTC };
   };
 
-  const sortedYears = Object.keys(quotesByYear)
-    .map(Number)
-    .sort((a, b) => b - a);
-
-  // Ouvrir l'année courante
-  const currentYear = new Date().getFullYear();
+  // Ouvrir TOUS les blocs d'année par défaut
   useEffect(() => {
-    if (sortedYears.includes(currentYear) && expandedYears[currentYear] !== true) {
-      setExpandedYears((p) => ({ ...p, [currentYear]: true }));
-    }
-  }, [sortedYears, currentYear, expandedYears]);
+    const allYears = Object.keys(quotesByYear).map(Number);
+    setExpandedYears((prev) => {
+      const next = { ...prev };
+      allYears.forEach((y) => {
+        if (next[y] === undefined) next[y] = true;
+      });
+      return next;
+    });
+  }, [quotesByYear]);
 
-  // ——— Détection “déjà converti” ———
+  // Détection conversion
   const isConvertedAccordingToStore = (q: any) =>
     Boolean(q?.invoiceId) || Boolean(q?.converted) || q?.status === 'converted';
-
   const invoiceExists = (invoiceId?: string) =>
     invoiceId ? invoices?.some((inv: any) => inv.id === invoiceId) : false;
-
   const isAlreadyConverted = (q: any) =>
     isConvertedAccordingToStore(q) || localConverted.has(q.id);
 
-  // Si une facture liée a été supprimée -> réautoriser la conversion
+  // Si facture supprimée => re-convertible
   useEffect(() => {
     quotes.forEach((q: any) => {
       if (q.invoiceId && !invoiceExists(q.invoiceId)) {
-        // Facture plus présente => on réinitialise côté store
         updateQuote(q.id, {
           converted: false,
           invoiceId: '',
           status: q.status === 'converted' ? 'accepted' : q.status,
         }).catch(() => {});
-        // et côté UI
         setLocalConverted((prev) => {
           const n = new Set(prev);
           n.delete(q.id);
@@ -287,18 +315,25 @@ export default function QuotesList() {
     });
   }, [invoices, quotes, updateQuote]);
 
-  // ——— Actions simples ———
+  // Actions basiques
   const handleDeleteQuote = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce devis ?')) deleteQuote(id);
   };
   const handleViewQuote = (id: string) => setViewingQuote(id);
   const handleEditQuote = (id: string) => setEditingQuote(id);
 
-  // Ouvrir le modal de conversion (si pas déjà converti)
+  // Ouvrir le formulaire de conversion
   const handleRequestConvert = (id: string) => {
     const q = quotes.find((x: any) => x.id === id);
     if (!q) return;
-    if (isAlreadyConverted(q)) return;
+
+    // Toujours afficher le bouton ; si déjà converti ET facture toujours présente -> toast
+    if (isAlreadyConverted(q) && invoiceExists(q.invoiceId)) {
+      setShowAlreadyToast(true);
+      return;
+    }
+
+    // Sinon on peut convertir (ex : facture supprimée)
     setAccessApproved(false);
     setConvertModalQuoteId(id);
   };
@@ -317,21 +352,17 @@ export default function QuotesList() {
         invoiceId = result.id as string;
       }
 
-      // Store
       try {
         await updateQuote(convertModalQuoteId, {
           converted: true,
           status: 'converted',
           ...(invoiceId ? { invoiceId } : {}),
         });
-      } catch {
-        // ignore
-      }
+      } catch {}
 
-      // UI immédiate
       setLocalConverted((prev) => new Set(prev).add(convertModalQuoteId));
 
-      // Fermer modal + overlay feu d'artifice 5s
+      // Succès : fermer + feu d’artifice
       setConvertModalQuoteId(null);
       setShowFireworks(true);
       setTimeout(() => setShowFireworks(false), 5000);
@@ -405,14 +436,19 @@ export default function QuotesList() {
             .map((year) => {
               const yearQuotes = quotesByYear[year];
               const stats = getYearStats(yearQuotes);
+              const expanded = !!expandedYears[year];
+
               return (
                 <div key={year} className="space-y-4">
+                  {/* En-tête (toujours affiché), avec bouton Masquer/Afficher */}
                   <div
-                    className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all duration-200"
-                    onClick={() => toggleYearExpansion(year)}
+                    className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg p-6 text-white hover:from-purple-700 hover:to-indigo-700 transition-all duration-200"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
+                      <div
+                        className="flex items-center space-x-4 cursor-pointer"
+                        onClick={() => toggleYearExpansion(year)}
+                      >
                         <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
                           <FileText className="w-6 h-6" />
                         </div>
@@ -421,7 +457,8 @@ export default function QuotesList() {
                           <p className="text-sm opacity-90">Résumé de l'année {year}</p>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-6">
+
+                      <div className="flex items-center space-x-3">
                         <div className="grid grid-cols-2 gap-6 text-center">
                           <div>
                             <p className="text-3xl font-bold text-white">{stats.count}</p>
@@ -434,8 +471,17 @@ export default function QuotesList() {
                             <p className="text-sm opacity-90 text-white">MAD Total TTC</p>
                           </div>
                         </div>
+
+                        <button
+                          onClick={() => toggleYearExpansion(year)}
+                          className="ml-2 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm"
+                          title={expanded ? 'Masquer' : 'Afficher'}
+                        >
+                          {expanded ? 'Masquer' : 'Afficher'}
+                        </button>
+
                         <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                          {expandedYears[year] ? (
+                          {expanded ? (
                             <ChevronDown className="w-5 h-5" />
                           ) : (
                             <ChevronRight className="w-5 h-5" />
@@ -445,7 +491,8 @@ export default function QuotesList() {
                     </div>
                   </div>
 
-                  {expandedYears[year] && (
+                  {/* Tableau (repliable) */}
+                  {expanded && (
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -527,18 +574,19 @@ export default function QuotesList() {
                                         <Edit className="w-4 h-4" />
                                       </button>
 
-                                      {/* Convertir : MASQUÉ si déjà converti */}
-                                      {!already ? (
-                                        <button
-                                          onClick={() => handleRequestConvert(quote.id)}
-                                          className="text-purple-600 hover:text-purple-700 transition-colors"
-                                          title="Convertir en facture"
-                                        >
-                                          <FileText className="w-4 h-4" />
-                                        </button>
-                                      ) : (
+                                      {/* Convertir : TOUJOURS AFFICHÉ */}
+                                      <button
+                                        onClick={() => handleRequestConvert(quote.id)}
+                                        className="text-purple-600 hover:text-purple-700 transition-colors"
+                                        title="Convertir en facture"
+                                      >
+                                        <FileText className="w-4 h-4" />
+                                      </button>
+
+                                      {/* Badge indicatif si déjà converti */}
+                                      {already && (
                                         <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-800">
-                                          Facturé
+                                          Déjà facturé
                                         </span>
                                       )}
 
@@ -567,8 +615,8 @@ export default function QuotesList() {
             <p className="text-gray-500 dark:text-gray-400">Aucun devis trouvé</p>
             <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg max-w-md mx-auto">
               <p className="text-sm text-purple-800 dark:text-purple-300">
-                💡 <strong>Astuce :</strong> Un devis “Accepté” peut être converti en facture via
-                l’icône <FileText className="w-4 h-4 inline" /> dans la colonne Actions.
+                💡 <strong>Astuce :</strong> Utilisez l’icône <FileText className="w-4 h-4 inline" /> pour
+                convertir un devis en facture.
               </p>
             </div>
           </div>
@@ -830,7 +878,7 @@ export default function QuotesList() {
         )}
       </AnimatePresence>
 
-      {/* Overlay feu d’artifice 5s après succès */}
+      {/* Overlay feu d’artifice */}
       <AnimatePresence>
         {showFireworks && (
           <FireworksOverlay
@@ -841,6 +889,14 @@ export default function QuotesList() {
           />
         )}
       </AnimatePresence>
+
+      {/* Toast “déjà créée” */}
+      <Toast
+        show={showAlreadyToast}
+        onClose={() => setShowAlreadyToast(false)}
+        title="Facture déjà créée pour ce devis"
+        desc="Vous pouvez consulter la facture depuis le module Factures."
+      />
     </div>
   );
 }
