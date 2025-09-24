@@ -1,5 +1,5 @@
 // src/components/quotes/QuotesList.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -25,10 +25,113 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
+/* --- Petit composant feu d’artifice sans dépendances externes --- */
+function FireworksOverlay({
+  show,
+  onDone,
+  message = 'Facture créée avec succès !',
+  durationMs = 5000,
+}: {
+  show: boolean;
+  onDone?: () => void;
+  message?: string;
+  durationMs?: number;
+}) {
+  const [particles, setParticles] = useState<
+    { id: number; x: number; y: number; dx: number; dy: number; delay: number }[]
+  >([]);
+
+  useEffect(() => {
+    if (!show) return;
+    // 3 salves * 24 particules
+    const bursts = 3;
+    const per = 24;
+    const arr: typeof particles = [];
+    let id = 0;
+    for (let b = 0; b < bursts; b++) {
+      const delay = b * 350;
+      for (let i = 0; i < per; i++) {
+        const angle = (Math.PI * 2 * i) / per;
+        const speed = 120 + Math.random() * 160;
+        arr.push({
+          id: id++,
+          x: 0,
+          y: 0,
+          dx: Math.cos(angle) * speed,
+          dy: Math.sin(angle) * speed - 40, // petit arc
+          delay,
+        });
+      }
+    }
+    setParticles(arr);
+    const t = setTimeout(() => onDone && onDone(), durationMs);
+    return () => clearTimeout(t);
+  }, [show, durationMs, onDone]);
+
+  if (!show) return null;
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      {/* couche d'animation */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {particles.map((p) => (
+          <motion.span
+            key={p.id}
+            initial={{ x: '50vw', y: '50vh', opacity: 0, scale: 0.8 }}
+            animate={{
+              x: `calc(50vw + ${p.dx}px)`,
+              y: `calc(50vh + ${p.dy}px)`,
+              opacity: [0, 1, 1, 0],
+              scale: [0.8, 1, 1, 0.9],
+            }}
+            transition={{
+              delay: p.delay / 1000,
+              duration: 1.4,
+              ease: 'easeOut',
+            }}
+            className="absolute block rounded-full"
+            style={{
+              width: 8,
+              height: 8,
+              background:
+                ['#22c55e', '#0ea5e9', '#f59e0b', '#a855f7', '#ef4444'][
+                  p.id % 5
+                ],
+              boxShadow: '0 0 12px rgba(255,255,255,0.6)',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* panneau centré */}
+      <motion.div
+        initial={{ y: 20, opacity: 0, scale: 0.98 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        exit={{ y: 20, opacity: 0, scale: 0.98 }}
+        transition={{ type: 'spring', damping: 22, stiffness: 240 }}
+        className="relative z-[91] bg-white dark:bg-gray-900 border border-white/20 dark:border-white/10 rounded-2xl px-8 py-6 text-center shadow-2xl"
+      >
+        <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto mb-3" />
+        <p className="text-xl font-semibold text-gray-900 dark:text-white">{message}</p>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+          Fermeture automatique…
+        </p>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function QuotesList() {
   const { t } = useLanguage();
   const { licenseType } = useLicense();
-  const { quotes, deleteQuote, convertQuoteToInvoice, updateQuote } = useData();
+
+  // ⬇️ on récupère AUSSI les factures pour détecter la suppression
+  const { quotes, invoices, deleteQuote, convertQuoteToInvoice, updateQuote } = useData();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<
@@ -50,10 +153,11 @@ export default function QuotesList() {
   const [convertModalQuoteId, setConvertModalQuoteId] = useState<string | null>(null);
   const [accessApproved, setAccessApproved] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [alreadyMsg, setAlreadyMsg] = useState<string | null>(null);
 
-  // ✅ Fallback local : on mémorise les devis convertis immédiatement
+  // succès “fermeture modal + overlay feu d’artifice 5s”
+  const [showFireworks, setShowFireworks] = useState(false);
+
+  // Fallback local : masquer bouton tout de suite
   const [localConverted, setLocalConverted] = useState<Set<string>>(new Set());
 
   const isTemplateProOnly = (templateId: string = 'template1') => {
@@ -70,6 +174,7 @@ export default function QuotesList() {
     };
     return m[templateId] || 'Template';
   };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'accepted':
@@ -113,25 +218,30 @@ export default function QuotesList() {
     }
   };
 
-  // filtres
-  const filteredQuotes = quotes.filter((q) => {
-    const matchesSearch =
-      q.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      q.number.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // ——— Filtres & groupements ———
+  const filteredQuotes = useMemo(
+    () =>
+      quotes.filter((q: any) => {
+        const matchesSearch =
+          q.client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          q.number?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      }),
+    [quotes, searchTerm, statusFilter]
+  );
 
-  // groupement
-  const quotesByYear = filteredQuotes.reduce((acc, q) => {
-    const y = new Date(q.date).getFullYear();
-    (acc[y] ||= []).push(q);
-    return acc;
-  }, {} as Record<number, typeof filteredQuotes>);
+  const quotesByYear = useMemo(() => {
+    return filteredQuotes.reduce((acc, q) => {
+      const y = new Date(q.date).getFullYear();
+      (acc[y] ||= []).push(q);
+      return acc;
+    }, {} as Record<number, typeof filteredQuotes>);
+  }, [filteredQuotes]);
 
   const getYearStats = (list: typeof filteredQuotes) => {
     const count = list.length;
-    const totalTTC = list.reduce((s, q) => s + (q.totalTTC || 0), 0);
+    const totalTTC = list.reduce((s, q: any) => s + Number(q.totalTTC || 0), 0);
     return { count, totalTTC };
   };
 
@@ -139,7 +249,7 @@ export default function QuotesList() {
     .map(Number)
     .sort((a, b) => b - a);
 
-  // ouvrir année courante
+  // Ouvrir l'année courante
   const currentYear = new Date().getFullYear();
   useEffect(() => {
     if (sortedYears.includes(currentYear) && expandedYears[currentYear] !== true) {
@@ -147,37 +257,59 @@ export default function QuotesList() {
     }
   }, [sortedYears, currentYear, expandedYears]);
 
-  // actions simples
+  // ——— Détection “déjà converti” ———
+  const isConvertedAccordingToStore = (q: any) =>
+    Boolean(q?.invoiceId) || Boolean(q?.converted) || q?.status === 'converted';
+
+  const invoiceExists = (invoiceId?: string) =>
+    invoiceId ? invoices?.some((inv: any) => inv.id === invoiceId) : false;
+
+  const isAlreadyConverted = (q: any) =>
+    isConvertedAccordingToStore(q) || localConverted.has(q.id);
+
+  // Si une facture liée a été supprimée -> réautoriser la conversion
+  useEffect(() => {
+    quotes.forEach((q: any) => {
+      if (q.invoiceId && !invoiceExists(q.invoiceId)) {
+        // Facture plus présente => on réinitialise côté store
+        updateQuote(q.id, {
+          converted: false,
+          invoiceId: '',
+          status: q.status === 'converted' ? 'accepted' : q.status,
+        }).catch(() => {});
+        // et côté UI
+        setLocalConverted((prev) => {
+          const n = new Set(prev);
+          n.delete(q.id);
+          return n;
+        });
+      }
+    });
+  }, [invoices, quotes, updateQuote]);
+
+  // ——— Actions simples ———
   const handleDeleteQuote = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce devis ?')) deleteQuote(id);
   };
   const handleViewQuote = (id: string) => setViewingQuote(id);
   const handleEditQuote = (id: string) => setEditingQuote(id);
 
-  // ---- logique "déjà converti" (inclut fallback local) ----
-  const isAlreadyConverted = (q: any) =>
-    Boolean(q?.invoiceId) || Boolean(q?.converted) || q?.status === 'converted';
-
+  // Ouvrir le modal de conversion (si pas déjà converti)
   const handleRequestConvert = (id: string) => {
-    const q = quotes.find((x) => x.id === id);
+    const q = quotes.find((x: any) => x.id === id);
     if (!q) return;
-    if (isAlreadyConverted(q) || localConverted.has(id)) {
-      setAlreadyMsg('La facture est déjà créée pour ce devis.');
-      setTimeout(() => setAlreadyMsg(null), 2500);
-      return;
-    }
+    if (isAlreadyConverted(q)) return;
     setAccessApproved(false);
     setConvertModalQuoteId(id);
   };
 
+  // Confirmer conversion
   const confirmConvert = async () => {
     if (!convertModalQuoteId || !accessApproved) return;
     setIsConverting(true);
     try {
-      // 1) créer la facture
       const result = await convertQuoteToInvoice(convertModalQuoteId);
 
-      // 2) récupérer un éventuel id retourné (string ou objet {id})
       let invoiceId: string | undefined;
       if (typeof result === 'string') invoiceId = result;
       else if (result && typeof result === 'object' && 'id' in result) {
@@ -185,7 +317,7 @@ export default function QuotesList() {
         invoiceId = result.id as string;
       }
 
-      // 3) marquer le devis converti dans la source de vérité (si DataContext permet)
+      // Store
       try {
         await updateQuote(convertModalQuoteId, {
           converted: true,
@@ -193,22 +325,16 @@ export default function QuotesList() {
           ...(invoiceId ? { invoiceId } : {}),
         });
       } catch {
-        // ignore si pas supporté
+        // ignore
       }
 
-      // 4) fallback immédiat côté UI
-      setLocalConverted((prev) => {
-        const n = new Set(prev);
-        n.add(convertModalQuoteId!);
-        return n;
-      });
+      // UI immédiate
+      setLocalConverted((prev) => new Set(prev).add(convertModalQuoteId));
 
-      // 5) animation succès
-      setShowSuccess(true);
-      setTimeout(() => {
-        setShowSuccess(false);
-        setConvertModalQuoteId(null);
-      }, 1200);
+      // Fermer modal + overlay feu d'artifice 5s
+      setConvertModalQuoteId(null);
+      setShowFireworks(true);
+      setTimeout(() => setShowFireworks(false), 5000);
     } catch (e) {
       console.error(e);
       alert('Erreur lors de la création de la facture.');
@@ -281,7 +407,6 @@ export default function QuotesList() {
               const stats = getYearStats(yearQuotes);
               return (
                 <div key={year} className="space-y-4">
-                  {/* Header année */}
                   <div
                     className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg p-6 text-white cursor-pointer hover:from-purple-700 hover:to-indigo-700 transition-all duration-200"
                     onClick={() => toggleYearExpansion(year)}
@@ -320,7 +445,6 @@ export default function QuotesList() {
                     </div>
                   </div>
 
-                  {/* Tableau année */}
                   {expandedYears[year] && (
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
                       <div className="overflow-x-auto">
@@ -351,9 +475,8 @@ export default function QuotesList() {
                             </tr>
                           </thead>
                           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {yearQuotes.map((quote) => {
-                              const already =
-                                isAlreadyConverted(quote) || localConverted.has(quote.id);
+                            {yearQuotes.map((quote: any) => {
+                              const already = isAlreadyConverted(quote);
                               return (
                                 <tr
                                   key={quote.id}
@@ -455,7 +578,7 @@ export default function QuotesList() {
       {/* Modals existants */}
       {viewingQuote && (
         <QuoteViewer
-          quote={quotes.find((q) => q.id === viewingQuote)!}
+          quote={quotes.find((q: any) => q.id === viewingQuote)!}
           onClose={() => setViewingQuote(null)}
           onEdit={() => {
             setViewingQuote(null);
@@ -467,7 +590,7 @@ export default function QuotesList() {
 
       {editingQuote && (
         <EditQuote
-          quote={quotes.find((q) => q.id === editingQuote)!}
+          quote={quotes.find((q: any) => q.id === editingQuote)!}
           onSave={(updatedData) => {
             updateQuote(editingQuote, updatedData);
             setEditingQuote(null);
@@ -476,6 +599,7 @@ export default function QuotesList() {
         />
       )}
 
+      {/* (Optionnel) Modal Pro template */}
       {showProModal && (
         <ProTemplateModal
           isOpen={showProModal}
@@ -513,20 +637,18 @@ export default function QuotesList() {
         </div>
       )}
 
-      {/* Bandeau info */}
       {quotes.length > 0 && (
         <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
           <p className="text-sm text-purple-800 dark:text-purple-300">
-            💡 <strong>Information :</strong> Convertissez un devis en facture via l’icône
-            <FileText className="w-4 h-4 inline mx-1" />. Si le devis est déjà converti, le bouton
-            est automatiquement masqué.
+            💡 <strong>Info :</strong> Après conversion, un feu d’artifice s’affiche 5 s. Si vous
+            supprimez la facture, le devis redevient convertible automatiquement.
           </p>
         </div>
       )}
 
       <QuoteActionsGuide />
 
-      {/* ======= MODAL Convertir en facture (dark mode + fallback) ======= */}
+      {/* ======= MODAL Convertir en facture (dark-mode OK) ======= */}
       <AnimatePresence>
         {convertModalQuoteId && (
           <motion.div
@@ -543,20 +665,13 @@ export default function QuotesList() {
               transition={{ type: 'spring', damping: 22, stiffness: 240 }}
             >
               {(() => {
-                const q = quotes.find((x) => x.id === convertModalQuoteId)!;
+                const q: any = quotes.find((x: any) => x.id === convertModalQuoteId)!;
                 const items = q.items || [];
                 const subtotal =
                   q.subtotal ??
                   items.reduce((s: number, it: any) => s + Number(it.total || 0), 0);
-                const totalVat =
-                  q.totalVat ??
-                  Math.max(
-                    0,
-                    (q.totalTTC ?? 0) - (q.subtotal ?? items.reduce((s: number, it: any) => s + Number(it.total || 0), 0))
-                  );
-                const totalTTC = q.totalTTC ?? subtotal + totalVat;
-                const already =
-                  isAlreadyConverted(q) || localConverted.has(convertModalQuoteId);
+                const totalTTC = Number(q.totalTTC ?? subtotal);
+                const totalVat = Math.max(0, totalTTC - subtotal);
 
                 return (
                   <>
@@ -682,16 +797,9 @@ export default function QuotesList() {
                           </button>
                         </div>
                       </div>
-
-                      {/* Message déjà facturé */}
-                      {already && (
-                        <div className="rounded-xl p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 text-sm text-yellow-800 dark:text-yellow-200">
-                          Ce devis est déjà converti en facture.
-                        </div>
-                      )}
                     </div>
 
-                    <div className="px-6 py-5 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end space-x-3 relative">
+                    <div className="px-6 py-5 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end space-x-3">
                       <button
                         onClick={() => setConvertModalQuoteId(null)}
                         className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
@@ -700,46 +808,19 @@ export default function QuotesList() {
                         Annuler
                       </button>
 
-                      {/* Bouton masqué si already */}
-                      {!already && (
-                        <motion.button
-                          whileHover={{ scale: accessApproved ? 1.02 : 1 }}
-                          whileTap={{ scale: accessApproved ? 0.98 : 1 }}
-                          onClick={confirmConvert}
-                          disabled={!accessApproved || isConverting}
-                          className={`px-4 py-2 rounded-lg text-white ${
-                            accessApproved
-                              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
-                              : 'bg-gray-400 cursor-not-allowed'
-                          }`}
-                        >
-                          {isConverting ? 'Création…' : 'Créer la facture'}
-                        </motion.button>
-                      )}
-
-                      {/* Animation succès */}
-                      <AnimatePresence>
-                        {showSuccess && (
-                          <motion.div
-                            className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 flex items-center justify-center rounded-b-2xl"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                          >
-                            <motion.div
-                              initial={{ scale: 0.8, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              exit={{ scale: 0.8, opacity: 0 }}
-                              className="text-center"
-                            >
-                              <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto" />
-                              <p className="mt-3 text-lg font-semibold text-gray-900 dark:text-white">
-                                Facture créée avec succès !
-                              </p>
-                            </motion.div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      <motion.button
+                        whileHover={{ scale: accessApproved ? 1.02 : 1 }}
+                        whileTap={{ scale: accessApproved ? 0.98 : 1 }}
+                        onClick={confirmConvert}
+                        disabled={!accessApproved || isConverting}
+                        className={`px-4 py-2 rounded-lg text-white ${
+                          accessApproved
+                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
+                            : 'bg-gray-400 cursor-not-allowed'
+                        }`}
+                      >
+                        {isConverting ? 'Création…' : 'Créer la facture'}
+                      </motion.button>
                     </div>
                   </>
                 );
@@ -749,18 +830,15 @@ export default function QuotesList() {
         )}
       </AnimatePresence>
 
-      {/* Toast : déjà créée */}
+      {/* Overlay feu d’artifice 5s après succès */}
       <AnimatePresence>
-        {alreadyMsg && (
-          <motion.div
-            className="fixed bottom-6 right-6 z-[80] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg px-4 py-3 flex items-center space-x-3"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 20, opacity: 0 }}
-          >
-            <AlertTriangle className="w-5 h-5 text-amber-500" />
-            <span className="text-sm text-gray-800 dark:text-gray-200">{alreadyMsg}</span>
-          </motion.div>
+        {showFireworks && (
+          <FireworksOverlay
+            show={showFireworks}
+            onDone={() => setShowFireworks(false)}
+            message="Facture créée avec succès !"
+            durationMs={5000}
+          />
         )}
       </AnimatePresence>
     </div>
