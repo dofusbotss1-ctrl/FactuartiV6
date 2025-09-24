@@ -44,6 +44,8 @@ import OrderDetail from './components/orders/OrderDetail';
 import EditOrder from './components/orders/EditOrder';
 import EmailVerificationPage from './components/auth/EmailVerificationPage';
 import EmailVerificationSuccessPage from './components/auth/EmailVerificationSuccessPage';
+import EmailActionPage from './components/auth/EmailActionPage';
+
 import { SupplierProvider } from './contexts/SupplierContext';
 
 
