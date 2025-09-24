@@ -94,11 +94,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 /** Base URL pour la redirection après vérif email */
 const BASE_URL =
   import.meta.env.VITE_PUBLIC_BASE_URL ||
-  (location.hostname === 'localhost' || location.hostname === '127.0.0.1'
-    ? `http://${location.hostname}:5173`
-    : window.location.origin);
+  'https://factuartiv6-ukge.bolt.host';
 
-/** ActionCodeSettings pour la vérification d’email (continueUrl personnalisée) */
 const getActionCodeSettings = (): ActionCodeSettings => ({
   url: `${BASE_URL}/verify-email-success?mode=verifyEmail`,
   handleCodeInApp: true,
