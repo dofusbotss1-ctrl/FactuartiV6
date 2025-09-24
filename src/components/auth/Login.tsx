@@ -1,3 +1,4 @@
+// src/components/auth/Login.tsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,14 +8,14 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../config/firebase';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(''); // email de connexion
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
-  
+
   const { login } = useAuth();
   const { language, setLanguage, t } = useLanguage();
 
@@ -24,13 +25,11 @@ export default function Login() {
     setError('');
 
     try {
-      const success = await login(email, password);
-      if (!success) {
-        setError('Email ou mot de passe incorrect');
-      }
+      const success = await login(email.trim(), password);
+      if (!success) setError('Email ou mot de passe incorrect');
     } catch (err: any) {
       if (err.message === 'ACCOUNT_BLOCKED_EXPIRED') {
-        setError('Compte bloqué : L\'abonnement Pro de votre entreprise a expiré. Contactez votre administrateur.');
+        setError("Compte bloqué : L'abonnement Pro de votre entreprise a expiré. Contactez votre administrateur.");
       } else {
         setError('Erreur de connexion');
       }
@@ -39,17 +38,11 @@ export default function Login() {
     }
   };
 
-  if (showRegister) {
-    return <RegisterForm onBack={() => setShowRegister(false)} />;
-  }
-
-  if (showForgotPassword) {
-    return <ForgotPasswordForm onBack={() => setShowForgotPassword(false)} />;
-  }
+  if (showRegister) return <RegisterForm onBack={() => setShowRegister(false)} />;
+  if (showForgotPassword) return <ForgotPasswordForm onBack={() => setShowForgotPassword(false)} />;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      {/* Bouton retour */}
       <Link
         to="/"
         className="fixed top-6 left-6 inline-flex items-center space-x-2 text-gray-600 hover:text-gray-900 hover:bg-white/80 px-3 py-2 rounded-lg transition-all duration-200 backdrop-blur-sm"
@@ -61,39 +54,32 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-6">
-            <div   className="w-16 h-16 bg-gradient-to-br from-black-200 to-red-600  rounded-lg flex items-center justify-center shadow-lg">
-              <img 
-                src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png" 
-                alt="Facturati Logo" 
+            <div className="w-16 h-16 bg-gradient-to-br from-black-200 to-red-600  rounded-lg flex items-center justify-center shadow-lg">
+              <img
+                src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
+                alt="Facturati Logo"
                 className="w-15 h-15 object-contain"
               />
             </div>
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            {t('Bienvenue sur Facturati')}
-            
-          </h2>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">{t('Bienvenue sur Facturati')}</h2>
           <p className="text-gray-600">{t('loginSubtitle')}</p>
-          
-          {/* Language Toggle */}
+
           <div className="flex justify-center mt-4">
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setLanguage('fr')}
                 className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                  language === 'fr' 
-                    ? 'bg-white text-teal-600 shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900'
+                  language === 'fr' ? 'bg-white text-teal-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
                 FR
               </button>
-             
             </div>
           </div>
         </div>
 
-        <form className="space-y-6" onSubmit={handleSubmit}>
+        <form className="space-y-6" onSubmit={handleSubmit} noValidate>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               {t('email')}
@@ -138,11 +124,7 @@ export default function Login() {
             </div>
           </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{error}</div>}
 
           <button
             type="submit"
@@ -171,26 +153,23 @@ export default function Login() {
               </button>
             </div>
           </div>
-          
-          <div className="text-center mt-4">
-            <p className="text-xs text-gray-500">
-            </p>
-          </div>
         </form>
       </div>
     </div>
   );
 }
 
-// Composant d'inscription
+/* ================== Register ================== */
+
 function RegisterForm({ onBack }: { onBack: () => void }) {
-  const { register, sendEmailVerification } = useAuth();
+  const { register } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
-  
+
+  // why: éviter la confusion avec l’email de connexion
   const [formData, setFormData] = useState({
-    email: '',
+    email: '', // email de connexion
     password: '',
     confirmPassword: '',
     companyName: '',
@@ -201,17 +180,13 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     phone: '',
     address: '',
     logo: '',
-    email: '',
+    companyEmail: '', // email de l’entreprise
     patente: '',
-    website: ''
+    website: '',
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setFormData((s) => ({ ...s, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,35 +199,72 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
       return;
     }
 
-    if (!formData.companyName || !formData.ice || !formData.email || !formData.patente || !formData.website) {
-      setError('Le nom de la société, l\'ICE, l\'email et la patente sont obligatoires');
+    // Requis de base
+    if (!formData.companyName.trim() || !formData.address.trim() || !formData.companyEmail.trim()) {
+      setError("Le nom de la société, l'adresse et l'email de l'entreprise sont obligatoires");
+      setIsLoading(false);
+      return;
+    }
+
+    // Champs numériques obligatoires
+    if (!formData.ice || !formData.if || !formData.rc || !formData.cnss || !formData.patente || !formData.phone) {
+      setError('ICE, IF, RC, CNSS, Patente et Téléphone sont obligatoires');
+      setIsLoading(false);
+      return;
+    }
+
+    // Règles Maroc
+    if (!/^\d{15}$/.test(formData.ice)) {
+      setError("L'ICE doit contenir exactement 15 chiffres");
+      setIsLoading(false);
+      return;
+    }
+    if (!/^\d{8}$/.test(formData.if)) {
+      setError("L'IF doit contenir exactement 8 chiffres");
+      setIsLoading(false);
+      return;
+    }
+    if (!/^\d{5,}$/.test(formData.rc)) {
+      setError('Le RC doit contenir au minimum 5 chiffres');
+      setIsLoading(false);
+      return;
+    }
+    if (!/^\d{7}$/.test(formData.cnss)) {
+      setError('Le CNSS doit contenir exactement 7 chiffres');
+      setIsLoading(false);
+      return;
+    }
+    if (!/^\d{8}$/.test(formData.patente)) {
+      setError('La Patente doit contenir exactement 8 chiffres');
+      setIsLoading(false);
+      return;
+    }
+    if (!/^(\+212|0)[5-7]\d{8}$/.test(formData.phone.replace(/\s/g, ''))) {
+      setError('Le téléphone doit être un numéro marocain valide (ex: +212 6 12 34 56 78)');
       setIsLoading(false);
       return;
     }
 
     try {
       const companyData = {
-        name: formData.companyName,
-        ice: formData.ice,
-        if: formData.if,
-        rc: formData.rc,
-        cnss: formData.cnss,
-        phone: formData.phone,
-        address: formData.address,
-        logo: formData.logo,
-        email: formData.email,
-        patente: formData.patente,
-        website: formData.website
+        name: formData.companyName.trim(),
+        ice: formData.ice.trim(),
+        if: formData.if.trim(),
+        rc: formData.rc.trim(),
+        cnss: formData.cnss.trim(),
+        phone: formData.phone.trim(),
+        address: formData.address.trim(),
+        logo: formData.logo.trim(),
+        email: formData.companyEmail.trim(), // <- IMPORTANT
+        patente: formData.patente.trim(),
+        website: formData.website.trim(),
       };
 
-      const success = await register(formData.email, formData.password, companyData);
-      if (success) {
-        setEmailSent(true);
-      } else {
-        setError('Erreur lors de la création du compte');
-      }
-    } catch (err) {
-      setError('Erreur lors de l\'inscription');
+      const success = await register(formData.email.trim(), formData.password, companyData);
+      if (success) setEmailSent(true);
+      else setError('Erreur lors de la création du compte');
+    } catch {
+      setError("Erreur lors de l'inscription");
     } finally {
       setIsLoading(false);
     }
@@ -268,13 +280,11 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                 <Mail className="w-8 h-8 text-white" />
               </div>
             </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              📧 Vérifiez votre email
-            </h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">📧 Vérifiez votre email</h2>
             <p className="text-gray-600 mb-6">
               Un email de vérification a été envoyé à <strong>{formData.email}</strong>
             </p>
-            
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
               <h3 className="font-medium text-blue-900 mb-2">📋 Étapes suivantes :</h3>
               <ol className="text-sm text-blue-800 space-y-1 text-left">
@@ -283,7 +293,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                 <li>3. Revenez sur Facturati pour vous connecter</li>
               </ol>
             </div>
-            
+
             <button
               onClick={onBack}
               className="w-full bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200"
@@ -309,43 +319,38 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
       <div className="max-w-2xl w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-6">
-             <div   className="w-16 h-16 bg-gradient-to-br from-black-200 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
-              <img 
-                src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png" 
-                alt="Facturati Logo" 
+            <div className="w-16 h-16 bg-gradient-to-br from-black-200 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
+              <img
+                src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
+                alt="Facturati Logo"
                 className="w-15 h-15 object-contain"
               />
             </div>
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Créer votre compte
-          </h2>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Créer votre compte</h2>
           <p className="text-gray-600">Rejoignez Facturati et simplifiez votre gestion</p>
         </div>
 
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          {/* Informations de connexion */}
+        <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+          {/* Connexion */}
           <div className="bg-gray-50 rounded-lg p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Informations de connexion</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   required
+                  autoComplete="email"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="votre@email.com"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mot de passe *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Mot de passe *</label>
                 <input
                   type="password"
                   name="password"
@@ -358,9 +363,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Confirmer le mot de passe *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Confirmer le mot de passe *</label>
                 <input
                   type="password"
                   name="confirmPassword"
@@ -374,14 +377,12 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
-          {/* Informations société */}
+          {/* Société */}
           <div className="bg-gray-50 rounded-lg p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Informations société</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nom de la société *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nom de la société *</label>
                 <input
                   type="text"
                   name="companyName"
@@ -392,11 +393,9 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                   placeholder="Nom de votre entreprise"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  ICE *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">ICE *</label>
                 <input
                   type="text"
                   name="ice"
@@ -404,71 +403,83 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                   onChange={handleChange}
                   required
                   maxLength={15}
+                  pattern="\d{15}"
+                  inputMode="numeric"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="001234567000012"
                 />
+                <p className="text-xs text-gray-500 mt-1">15 chiffres exactement</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  IF (Identifiant Fiscal)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">IF (Identifiant Fiscal) *</label>
                 <input
                   type="text"
                   name="if"
                   value={formData.if}
                   onChange={handleChange}
+                  required
+                  maxLength={8}
+                  pattern="\d{8}"
+                  inputMode="numeric"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="12345678"
                 />
+                <p className="text-xs text-gray-500 mt-1">8 chiffres exactement</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  RC (Registre de Commerce)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">RC (Registre de Commerce) *</label>
                 <input
                   type="text"
                   name="rc"
                   value={formData.rc}
                   onChange={handleChange}
+                  required
+                  pattern="\d{5,}"
+                  inputMode="numeric"
+                  maxLength={20}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="98765"
                 />
+                <p className="text-xs text-gray-500 mt-1">Minimum 5 chiffres</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  CNSS
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">CNSS *</label>
                 <input
                   type="text"
                   name="cnss"
                   value={formData.cnss}
                   onChange={handleChange}
+                  required
+                  maxLength={7}
+                  pattern="\d{7}"
+                  inputMode="numeric"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="1234567"
                 />
+                <p className="text-xs text-gray-500 mt-1">7 chiffres exactement</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Téléphone
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
                 <input
-                  type="text"
+                  type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
+                  required
+                  inputMode="numeric"
+                  pattern="(\+212|0)[5-7]\d{8}"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                  placeholder="+212 522 123 456"
+                  placeholder="+212 6 12 34 56 78"
                 />
+                <p className="text-xs text-gray-500 mt-1">Format : +212 6 12 34 56 78</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Logo (URL)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Logo (URL)</label>
                 <input
                   type="url"
                   name="logo"
@@ -477,42 +488,42 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="https://exemple.com/logo.png"
                 />
+                <p className="text-xs text-gray-500 mt-1">Optionnel</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email de l'entreprise *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email de l'entreprise *</label>
                 <input
                   type="email"
-                  name="email"
-                  value={formData.email}
+                  name="companyEmail"
+                  value={formData.companyEmail}
                   onChange={handleChange}
                   required
+                  autoComplete="email"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="contact@entreprise.com"
                 />
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Patente *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Patente *</label>
                 <input
                   type="text"
                   name="patente"
                   value={formData.patente}
                   onChange={handleChange}
                   required
+                  maxLength={8}
+                  pattern="\d{8}"
+                  inputMode="numeric"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="12345678"
                 />
+                <p className="text-xs text-gray-500 mt-1">8 chiffres exactement</p>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Site web
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Site web</label>
                 <input
                   type="url"
                   name="website"
@@ -521,17 +532,17 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="https://www.entreprise.com"
                 />
+                <p className="text-xs text-gray-500 mt-1">Optionnel</p>
               </div>
-              
+
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Adresse
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Adresse *</label>
                 <textarea
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
                   rows={3}
+                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   placeholder="Adresse complète de votre entreprise"
                 />
@@ -539,11 +550,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{error}</div>}
 
           <div className="flex space-x-4">
             <button
@@ -567,7 +574,8 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   );
 }
 
-// Composant de récupération de mot de passe
+/* ================== Forgot Password ================== */
+
 function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -583,13 +591,9 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       await sendPasswordResetEmail(auth, email);
       setEmailSent(true);
     } catch (err: any) {
-      if (err.code === 'auth/user-not-found') {
-        setError('Aucun compte trouvé avec cette adresse email');
-      } else if (err.code === 'auth/invalid-email') {
-        setError('Adresse email invalide');
-      } else {
-        setError('Erreur lors de l\'envoi de l\'email');
-      }
+      if (err.code === 'auth/user-not-found') setError('Aucun compte trouvé avec cette adresse email');
+      else if (err.code === 'auth/invalid-email') setError('Adresse email invalide');
+      else setError("Erreur lors de l'envoi de l'email");
     } finally {
       setIsLoading(false);
     }
@@ -605,13 +609,11 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
                 <CheckCircle className="w-8 h-8 text-white" />
               </div>
             </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              ✅ Email envoyé !
-            </h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">✅ Email envoyé !</h2>
             <p className="text-gray-600 mb-6">
               Un lien de réinitialisation a été envoyé à <strong>{email}</strong>
             </p>
-            
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
               <h3 className="font-medium text-blue-900 mb-2">📋 Instructions :</h3>
               <ol className="text-sm text-blue-800 space-y-1 text-left">
@@ -621,7 +623,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
                 <li>4. Revenez ici pour vous connecter</li>
               </ol>
             </div>
-            
+
             <div className="flex space-x-3">
               <button
                 onClick={() => {
@@ -662,19 +664,13 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
               <Lock className="w-8 h-8 text-white" />
             </div>
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            🔑 Mot de passe oublié
-          </h2>
-          <p className="text-gray-600">
-            Saisissez votre adresse email pour recevoir un lien de réinitialisation
-          </p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">🔑 Mot de passe oublié</h2>
+          <p className="text-gray-600">Saisissez votre adresse email pour recevoir un lien de réinitialisation</p>
         </div>
 
-        <form className="space-y-6" onSubmit={handleSubmit}>
+        <form className="space-y-6" onSubmit={handleSubmit} noValidate>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Adresse email
-            </label>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">Adresse email</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Mail className="h-5 w-5 text-gray-400" />
