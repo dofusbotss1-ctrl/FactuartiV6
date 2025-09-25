@@ -46,12 +46,13 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
 
   const getOrderStatusBadge = (status: string) => {
     switch (status) {
-      case 'paid': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Payé</span>;
-      case 'received': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Reçu</span>;
-      case 'sent': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Envoyé</span>;
-      default: return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Brouillon</span>;
+      case 'paid': return <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs bg-green-100 text-green-800">Payé</span>;
+      case 'received': return <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800">Reçu</span>;
+      case 'sent': return <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800">Envoyé</span>;
+      default: return <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-800">Brouillon</span>;
     }
   };
+
   const getPaymentMethodBadge = (method: string) => {
     const badges = {
       virement: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Virement' },
@@ -60,7 +61,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
       carte: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Carte' }
     } as const;
     const badge = (badges as any)[method] || badges.virement;
-    return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>;
+    return <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>;
   };
 
   const handleDeleteOrder = (id: string) => {
@@ -70,13 +71,13 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce paiement ?')) deleteSupplierPayment(id);
   };
 
-  // ---------------- PDF programmatique stylé ----------------
+  // ------- Utils -------
   const COLORS = {
-    blue: [37, 99, 235] as [number, number, number],        // bleu 600
-    blueLight: [239, 246, 255] as [number, number, number], // bleu 50
-    red: [239, 68, 68] as [number, number, number],         // rouge 500
-    redLight: [254, 242, 242] as [number, number, number],  // rouge 50
-    green: [34, 197, 94] as [number, number, number],       // vert 500
+    blue: [37, 99, 235] as [number, number, number],
+    blueLight: [239, 246, 255] as [number, number, number],
+    red: [239, 68, 68] as [number, number, number],
+    redLight: [254, 242, 242] as [number, number, number],
+    green: [34, 197, 94] as [number, number, number],
     greenLight: [240, 253, 244] as [number, number, number],
     grayText: [17, 24, 39] as [number, number, number],
     grayHead: [243, 244, 246] as [number, number, number]
@@ -87,7 +88,14 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
 
   const textOrDash = (v: any) => (v == null || v === '' ? '-' : String(v));
 
-  /** Pourquoi: éviter CORS/taint; si KO on ignore le logo sans planter */
+  const itemsToNameQty = (items: Array<{ productName?: string; quantity?: number }>) => {
+    // Pourquoi: lisible + compact dans une seule cellule
+    if (!items || !items.length) return '-';
+    return items
+      .map(it => `${it.productName ?? '-'} × ${Number(it.quantity ?? 0)}`)
+      .join(', ');
+  };
+
   const fetchAsDataURL = async (url: string): Promise<string | null> => {
     try {
       const res = await fetch(url, { mode: 'cors' });
@@ -102,7 +110,6 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     } catch { return null; }
   };
 
-  /** Titre centré, gras, avec espace avant/après pour bien séparer les tableaux */
   const drawCenteredTitle = (doc: jsPDF, text: string, y: number, colorRGB?: [number, number, number]) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     doc.setFont('helvetica', 'bold');
@@ -112,6 +119,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     doc.setTextColor(...COLORS.grayText);
   };
 
+  // ------- PDF export -------
   const exportSupplierReportPDF = async () => {
     const companyName =
       (supplier as any).companyName ||
@@ -130,28 +138,23 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     const headerH = 28;
     const footerH = 12;
 
-    /** En-tête: logo à gauche + nom à droite du logo; titre centré */
     const drawHeaderFooter = (pageNumber: number) => {
       let x = m, y = m;
       if (logoDataUrl) {
         try {
           const imgType = logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
           doc.addImage(logoDataUrl, imgType as any, x, y, 18, 18);
-        } catch { /* ignorer */ }
+        } catch {}
       }
-      // Nom société à droite du logo
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
       doc.setTextColor(...COLORS.grayText);
-      doc.text(companyName, x + 22, y + 6);
-
-      // Date, discret, sous le nom
+      doc.text(companyName, x + 22, y + 6);                   // Nom à droite du logo
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(107, 114, 128);
       doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, x + 22, y + 12);
 
-      // Titre centré
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(14);
       doc.setTextColor(234, 88, 12);
@@ -160,12 +163,10 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
       doc.setTextColor(...COLORS.grayText);
       doc.text(`« ${supplierName} »`, pageWidth / 2, y + 12, { align: 'center' });
 
-      // Ligne base header
       doc.setDrawColor(234, 88, 12);
       doc.setLineWidth(0.6);
       doc.line(m, y + 16, pageWidth - m, y + 16);
 
-      // Footer
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(107, 114, 128);
@@ -175,13 +176,13 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
 
     const baseTableOpts: Partial<UserOptions> = {
       theme: 'grid',
-      styles: { fontSize: 9, cellPadding: 2, lineColor: [229, 231, 235], textColor: COLORS.grayText },
+      styles: { fontSize: 9, cellPadding: 2, lineColor: [229, 231, 235], textColor: COLORS.grayText, overflow: 'linebreak' },
       headStyles: { fillColor: COLORS.grayHead, textColor: [31, 41, 55], fontStyle: 'bold' },
       margin: { top: m + headerH, bottom: m + footerH, left: m, right: m },
       didDrawPage: (data) => drawHeaderFooter(data.pageNumber)
     };
 
-    // --- 1) Infos fournisseur ---
+    // 1) Infos fournisseur
     drawCenteredTitle(doc, 'Informations Fournisseur', m + headerH + 6);
     autoTable(doc, {
       ...baseTableOpts,
@@ -201,7 +202,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
 
     let y = (doc as any).lastAutoTable?.finalY ?? (m + headerH + 10);
 
-    // --- 2) Résumé financier (Balance colorée: vert si ≥ 0, rouge sinon) ---
+    // 2) Résumé financier (balance colorée)
     drawCenteredTitle(doc, 'Résumé Financier', y + 10);
     autoTable(doc, {
       ...baseTableOpts,
@@ -215,7 +216,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
       didParseCell: (hook) => {
         if (hook.section === 'body' && hook.column.index === 2) {
           const bal = Number(stats.balance ?? 0);
-          hook.cell.styles.textColor = bal >= 0 ? COLORS.green : COLORS.red; // Pourquoi: signal clair
+          hook.cell.styles.textColor = bal >= 0 ? COLORS.green : COLORS.red;
           hook.cell.styles.fontStyle = 'bold';
           hook.cell.styles.fillColor = bal >= 0 ? COLORS.greenLight : COLORS.redLight;
           hook.cell.styles.halign = 'center';
@@ -226,39 +227,41 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
 
     y = (doc as any).lastAutoTable?.finalY ?? (m + headerH + 14);
 
-    // --- 3) Commandes (bleu) ---
+    // 3) Commandes — **Ajout colonne "Articles (Nom × Qté)"**
     drawCenteredTitle(doc, '📦 Commandes', y + 12, COLORS.blue);
     autoTable(doc, {
       ...baseTableOpts,
       startY: y + 16,
-      head: [['N°', 'Date', 'Sous-total HT', 'TVA', 'Total TTC', 'Statut']],
+      head: [['N°', 'Date', 'Articles (Nom × Qté)', 'Sous-total HT', 'TVA', 'Total TTC', 'Statut']],
       body: (supplierOrders.length
         ? supplierOrders.map<RowInput>((o) => ([
             textOrDash(o.number),
             new Date(o.date).toLocaleDateString('fr-FR'),
-            `${fmtMAD(o.subtotal)} MAD`,
-            `${fmtMAD(o.totalVat)} MAD`,
-            `${fmtMAD(o.totalTTC)} MAD`,
-            textOrDash(o.status)
+            itemsToNameQty((o as any).items || []),
+            `${fmtMAD((o as any).subtotal)} MAD`,
+            `${fmtMAD((o as any).totalVat)} MAD`,
+            `${fmtMAD((o as any).totalTTC)} MAD`,
+            textOrDash((o as any).status)
           ] as CellDef[]))
-        : [['-', '-', '-', '-', '-', '-']]
+        : [['-', '-', '-', '-', '-', '-', '-']]
       ),
       headStyles: { ...baseTableOpts.headStyles!, fillColor: COLORS.blue, textColor: [255, 255, 255] },
-      styles: { ...baseTableOpts.styles!, textColor: COLORS.grayText },
       alternateRowStyles: { fillColor: COLORS.blueLight },
+      // Largeurs adaptées à A4 (inner ~186mm)
       columnStyles: {
-        0: { cellWidth: 28 },
-        1: { cellWidth: 24, halign: 'center' },
-        2: { cellWidth: 32, halign: 'right' },
-        3: { cellWidth: 26, halign: 'right' },
-        4: { cellWidth: 32, halign: 'right' },
-        5: { cellWidth: 'auto', halign: 'center' }
+        0: { cellWidth: 20 },                  // N°
+        1: { cellWidth: 20, halign: 'center' },// Date
+        2: { cellWidth: 76 },                  // Articles (wrap)
+        3: { cellWidth: 22, halign: 'right' }, // HT
+        4: { cellWidth: 14, halign: 'right' }, // TVA
+        5: { cellWidth: 22, halign: 'right' }, // TTC
+        6: { cellWidth: 12, halign: 'center' } // Statut
       }
     });
 
     y = (doc as any).lastAutoTable?.finalY ?? (m + headerH + 16);
 
-    // --- 4) Paiements (rouge) ---
+    // 4) Paiements — rouge
     drawCenteredTitle(doc, '💳 Paiements', y + 12, COLORS.red);
     autoTable(doc, {
       ...baseTableOpts,
@@ -286,7 +289,6 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     });
 
     try { (doc as any).putTotalPages(totalPagesExp); } catch {}
-
     const fileName = `Fournisseur_${supplierName.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
     doc.save(fileName);
   };
@@ -317,10 +319,10 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
       </div>
 
       {/* Informations générales */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-300">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center space-x-2 transition-colors duration-300">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
               <Building2 className="w-5 h-5 text-orange-600" />
               <span>Informations générales</span>
             </h3>
@@ -328,15 +330,15 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
               <div className="flex items-center space-x-3">
                 <Building2 className="w-5 h-5 text-gray-400" />
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-100 transition-colors duration-300">{supplier.name}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">ICE: {(supplier as any).ice}</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{supplier.name}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">ICE: {(supplier as any).ice}</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
                 <User className="w-5 h-5 text-gray-400" />
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-gray-100 transition-colors duration-300">{(supplier as any).contactPerson}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors duration-300">Personne de contact</p>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{(supplier as any).contactPerson}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Personne de contact</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
@@ -364,7 +366,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
           </div>
 
           <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center space-x-2 transition-colors duration-300">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
               <DollarSign className="w-5 h-5 text-green-600" />
               <span>Résumé financier</span>
             </h3>
@@ -377,13 +379,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
                 <div className="text-2xl font-bold text-green-600">{stats.totalPayments.toLocaleString()}</div>
                 <div className="text-sm text-green-700 dark:text-green-300">MAD Total Paiements</div>
               </div>
-              <div
-                className={`border rounded-lg p-4 text-center ${
-                  stats.balance >= 0
-                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
-                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'
-                }`}
-              >
+              <div className={`border rounded-lg p-4 text-center ${stats.balance >= 0 ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'}`}>
                 <div className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {stats.balance.toLocaleString()}
                 </div>
@@ -443,7 +439,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">N° Commande</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Articles</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Articles (Nom × Qté)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sous-total HT</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">TVA</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total TTC</th>
@@ -460,20 +456,21 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {new Date(order.date).toLocaleDateString('fr-FR')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 dark:text-gray-100">{order.items.map(i => i.productName).join(', ')}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{order.items.length} article{order.items.length > 1 ? 's' : ''}</div>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900 dark:text-gray-100">
+                        {itemsToNameQty((order as any).items || [])}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{order.subtotal.toLocaleString()} MAD</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{order.totalVat.toLocaleString()} MAD</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">{order.totalTTC.toLocaleString()} MAD</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{getOrderStatusBadge(order.status)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{(order as any).subtotal.toLocaleString()} MAD</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{(order as any).totalVat.toLocaleString()} MAD</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">{(order as any).totalTTC.toLocaleString()} MAD</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{getOrderStatusBadge((order as any).status)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       <div className="flex items-center space-x-3">
-                        <button onClick={() => setEditingOrder(order.id)} className="text-amber-600 hover:text-amber-700 transition-colors" title="Modifier">
+                        <button onClick={() => setEditingOrder(order.id)} className="text-amber-600 hover:text-amber-700" title="Modifier">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDeleteOrder(order.id)} className="text-red-600 hover:text-red-700 transition-colors" title="Supprimer">
+                        <button onClick={() => handleDeleteOrder(order.id)} className="text-red-600 hover:text-red-700" title="Supprimer">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -535,10 +532,10 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{payment.description || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       <div className="flex items-center space-x-3">
-                        <button onClick={() => setEditingPayment(payment.id)} className="text-amber-600 hover:text-amber-700 transition-colors" title="Modifier">
+                        <button onClick={() => setEditingPayment(payment.id)} className="text-amber-600 hover:text-amber-700" title="Modifier">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleDeletePayment(payment.id)} className="text-red-600 hover:text-red-700 transition-colors" title="Supprimer">
+                        <button onClick={() => handleDeletePayment(payment.id)} className="text-red-600 hover:text-red-700" title="Supprimer">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -564,13 +561,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">Balance Fournisseur</h3>
-              <div
-                className={`inline-flex items-center space-x-3 px-8 py-6 rounded-2xl ${
-                  stats.balance >= 0
-                    ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700'
-                    : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'
-                }`}
-              >
+              <div className={`inline-flex items-center space-x-3 px-8 py-6 rounded-2xl ${stats.balance >= 0 ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'}`}>
                 {stats.balance >= 0 ? <CheckCircle className="w-12 h-12 text-green-600" /> : <AlertTriangle className="w-12 h-12 text-red-600" />}
                 <div>
                   <div className={`text-4xl font-bold ${stats.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -641,7 +632,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
 }
 
 /**
- * Dépendances à installer:
+ * Dépendances:
  *   npm i jspdf jspdf-autotable
  *   # ou
  *   yarn add jspdf jspdf-autotable
