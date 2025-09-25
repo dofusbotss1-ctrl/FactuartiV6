@@ -1,9 +1,10 @@
-// src/components/products/StockHistoryModal.tsx
+// src/components/stock/StockHistoryModal.tsx
 import React, { useState } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useOrder } from '../../contexts/OrderContext';
 import { Product } from '../../contexts/DataContext';
 import Modal from '../common/Modal';
+import html2pdf from 'html2pdf.js';
 import {
   Package,
   RotateCcw,
@@ -14,10 +15,8 @@ import {
   FileText,
   Clock,
   ExternalLink,
-  X,
-  TrendingUp
+  X
 } from 'lucide-react';
-import html2pdf from 'html2pdf.js';
 
 interface StockHistoryModalProps {
   isOpen: boolean;
@@ -32,6 +31,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const [filterType, setFilterType] = useState('all');
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
+  // 1) Construire l'historique
   const generateProductHistory = () => {
     const history: any[] = [];
 
@@ -51,8 +51,8 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       });
     }
 
-    const movements = stockMovements.filter(m => m.productId === product.id && m.type === 'adjustment');
-    movements.forEach(movement => {
+    const adjustments = stockMovements.filter(m => m.productId === product.id && m.type === 'adjustment');
+    adjustments.forEach(movement => {
       history.push({
         id: movement.id,
         type: movement.type,
@@ -68,10 +68,10 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       });
     });
 
-    const orderMovements = stockMovements.filter(
+    const orderMoves = stockMovements.filter(
       m => m.productId === product.id && (m.type === 'order_out' || m.type === 'order_cancel_return')
     );
-    orderMovements.forEach(movement => {
+    orderMoves.forEach(movement => {
       history.push({
         id: movement.id,
         type: movement.type,
@@ -92,18 +92,19 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const history = generateProductHistory();
 
+  // 2) Résumé
   const calculateCurrentStock = () => {
     const initialStock = product.initialStock || 0;
     const adjustments = stockMovements
       .filter(m => m.productId === product.id && m.type === 'adjustment')
-      .reduce((sum, m) => sum + m.quantity, 0);
+      .reduce((sum, m) => sum + (m.quantity || 0), 0);
     const deliveredOrders = orders.reduce((sum, order) => {
       if (order.status === 'livre') {
         return (
           sum +
           order.items
             .filter(item => item.productName === product.name)
-            .reduce((itemSum, item) => itemSum + item.quantity, 0)
+            .reduce((s, it) => s + (it.quantity || 0), 0)
         );
       }
       return sum;
@@ -119,32 +120,27 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           sum +
           order.items
             .filter(item => item.productName === product.name)
-            .reduce((itemSum, item) => itemSum + item.quantity, 0)
+            .reduce((s, it) => s + (it.quantity || 0), 0)
         );
       }
       return sum;
     }, 0),
     totalAdjustments: stockMovements
       .filter(m => m.productId === product.id && m.type === 'adjustment')
-      .reduce((sum, m) => sum + m.quantity, 0),
+      .reduce((sum, m) => sum + (m.quantity || 0), 0),
     currentStock: calculateCurrentStock()
   };
 
+  // 3) Filtres
   const filteredHistory = history
     .filter(movement => {
       if (selectedPeriod === 'all') return true;
       const movementDate = new Date(movement.date);
       const now = new Date();
-      switch (selectedPeriod) {
-        case 'week':
-          return movementDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        case 'month':
-          return movementDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        case 'quarter':
-          return movementDate >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        default:
-          return true;
-      }
+      if (selectedPeriod === 'week') return movementDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      if (selectedPeriod === 'month') return movementDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      if (selectedPeriod === 'quarter') return movementDate >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      return true;
     })
     .filter(movement => {
       if (filterType === 'all') return true;
@@ -154,6 +150,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       return true;
     });
 
+  // 4) UI helpers
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'initial':
@@ -161,14 +158,13 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       case 'order_out':
         return <ShoppingCart className="w-4 h-4 text-red-600" />;
       case 'order_cancel_return':
-        return <TrendingUp className="w-4 h-4 text-green-600" />;
+        return <Package className="w-4 h-4 text-green-600" />;
       case 'adjustment':
         return <RotateCcw className="w-4 h-4 text-purple-600" />;
       default:
         return <FileText className="w-4 h-4 text-gray-600" />;
     }
   };
-
   const getMovementLabel = (type: string) => {
     switch (type) {
       case 'initial':
@@ -183,136 +179,133 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         return 'Mouvement';
     }
   };
-
+  const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
-  const getMovementColor = (quantity: number) =>
-    quantity > 0 ? 'text-green-600' : quantity < 0 ? 'text-red-600' : 'text-gray-600';
 
-  // -------- PDF (remplace l'export CSV) --------
-const exportStockPDF = () => {
-  const nice = (v: number, d = 3) => Number(v ?? 0).toFixed(d);
-  const qtyStyle = (q: number) =>
-    q > 0 ? 'color:#16a34a;font-weight:700;' : q < 0 ? 'color:#dc2626;font-weight:700;' : '';
+  // 5) Export PDF fiable
+  const exportStockPDF = () => {
+    const nice = (v: number, d = 3) => Number(v ?? 0).toFixed(d);
+    const qtyStyle = (q: number) =>
+      q > 0 ? 'color:#16a34a;font-weight:700;' : q < 0 ? 'color:#dc2626;font-weight:700;' : '';
 
-  const rows = filteredHistory.map(h => `
-    <tr>
-      <td style="border:1px solid #e2e8f0;padding:8px;">
-        ${new Date(h.date).toLocaleDateString('fr-FR')}
-      </td>
-      <td style="border:1px solid #e2e8f0;padding:8px;">
-        ${new Date(h.date).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
-      </td>
-      <td style="border:1px solid #e2e8f0;padding:8px;">${getMovementLabel(h.type)}</td>
-      <td style="border:1px solid #e2e8f0;padding:8px;${qtyStyle(h.quantity ?? 0)}">
-        ${(h.quantity ?? 0) > 0 ? '+' : ''}${nice(h.quantity)} ${product.unit}
-      </td>
-      <td style="border:1px solid #e2e8f0;padding:8px;">${nice(h.previousStock)} → <strong>${nice(h.newStock)}</strong></td>
-      <td style="border:1px solid #e2e8f0;padding:8px;">${h.reason || ''}</td>
-      <td style="border:1px solid #e2e8f0;padding:8px;">${h.reference || ''}</td>
-      <td style="border:1px solid #e2e8f0;padding:8px;">${h.userName || ''}</td>
-      <td style="border:1px solid #e2e8f0;padding:8px;">${h.orderDetails ? h.orderDetails.orderNumber : ''}</td>
-    </tr>
-  `).join('');
+    const rows = filteredHistory
+      .map(
+        (h: any) => `
+      <tr>
+        <td style="border:1px solid #e2e8f0;padding:8px;">${new Date(h.date).toLocaleDateString('fr-FR')}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px;">${new Date(h.date).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px;">${getMovementLabel(h.type)}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px;${qtyStyle(h.quantity ?? 0)}">
+          ${(h.quantity ?? 0) > 0 ? '+' : ''}${nice(h.quantity)} ${product.unit}
+        </td>
+        <td style="border:1px solid #e2e8f0;padding:8px;">${nice(h.previousStock)} → <strong>${nice(h.newStock)}</strong></td>
+        <td style="border:1px solid #e2e8f0;padding:8px;">${h.reason || ''}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px;">${h.reference || ''}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px;">${h.userName || ''}</td>
+        <td style="border:1px solid #e2e8f0;padding:8px;">${h.orderDetails ? h.orderDetails.orderNumber : ''}</td>
+      </tr>`
+      )
+      .join('');
 
-  // conteneur invisible mais mesuré
-  const holder = document.createElement('div');
-  Object.assign(holder.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: '800px',          // largeur stable pour html2canvas
-    minHeight: '1200px',     // ~A4
-    background: '#ffffff',
-    zIndex: '-1',
-    opacity: '0',
-    pointerEvents: 'none'
-  });
+    const holder = document.createElement('div');
+    Object.assign(holder.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '800px',
+      minHeight: '1200px',
+      background: '#ffffff',
+      zIndex: '-1',
+      opacity: '0',
+      pointerEvents: 'none'
+    } as CSSStyleDeclaration);
 
-  holder.innerHTML = `
-    <div style="padding:20px;font-family:Arial,sans-serif;color:#0f172a;">
-      <div style="text-align:center;border-bottom:2px solid #2563eb;padding-bottom:8px;margin-bottom:14px;">
-        <div style="font-size:22px;font-weight:700;color:#1e293b;">Historique du Stock</div>
-        <div style="color:#2563eb;font-weight:600;margin-top:4px;">
-          ${product.name} • ${product.category} • ${product.unit}
+    holder.innerHTML = `
+      <div style="padding:20px;font-family:Arial,sans-serif;color:#0f172a;">
+        <div style="text-align:center;border-bottom:2px solid #2563eb;padding-bottom:8px;margin-bottom:14px;">
+          <div style="font-size:22px;font-weight:700;color:#1e293b;">Historique du Stock</div>
+          <div style="color:#2563eb;font-weight:600;margin-top:4px;">
+            ${product.name} • ${product.category} • ${product.unit}
+          </div>
+          <div style="font-size:12px;color:#475569;margin-top:4px;">Généré le ${new Date().toLocaleString('fr-FR')}</div>
         </div>
-        <div style="font-size:12px;color:#475569;margin-top:4px;">
-          Généré le ${new Date().toLocaleString('fr-FR')}
-        </div>
-      </div>
 
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0;">
-        <div style="border:1px solid #c7d2fe;border-radius:10px;padding:12px;">
-          <div style="font-size:11px;color:#475569;margin-bottom:6px;">Stock initial</div>
-          <div style="font-size:16px;font-weight:700;color:#2563eb;">${summary.initialStock.toFixed(3)}</div>
-        </div>
-        <div style="border:1px solid #fecaca;border-radius:10px;padding:12px;">
-          <div style="font-size:11px;color:#475569;margin-bottom:6px;">Total commandé</div>
-          <div style="font-size:16px;font-weight:700;color:#dc2626;">${summary.totalOrdersSold.toFixed(3)}</div>
-        </div>
-        <div style="border:1px solid #e9d5ff;border-radius:10px;padding:12px;">
-          <div style="font-size:11px;color:#475569;margin-bottom:6px;">Rectifications</div>
-          <div style="font-size:16px;font-weight:700;color:#7c3aed;">
-            ${summary.totalAdjustments > 0 ? '+' : ''}${summary.totalAdjustments.toFixed(3)}
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0;">
+          <div style="border:1px solid #c7d2fe;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:#475569;margin-bottom:6px;">Stock initial</div>
+            <div style="font-size:16px;font-weight:700;color:#2563eb;">${summary.initialStock.toFixed(3)}</div>
+          </div>
+          <div style="border:1px solid #fecaca;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:#475569;margin-bottom:6px;">Total commandé</div>
+            <div style="font-size:16px;font-weight:700;color:#dc2626;">${summary.totalOrdersSold.toFixed(3)}</div>
+          </div>
+          <div style="border:1px solid #e9d5ff;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:#475569;margin-bottom:6px;">Rectifications</div>
+            <div style="font-size:16px;font-weight:700;color:#7c3aed;">
+              ${summary.totalAdjustments > 0 ? '+' : ''}${summary.totalAdjustments.toFixed(3)}
+            </div>
+          </div>
+          <div style="border:1px solid #bbf7d0;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:#475569;margin-bottom:6px;">Stock actuel</div>
+            <div style="font-size:16px;font-weight:700;color:#16a34a;">${summary.currentStock.toFixed(3)}</div>
           </div>
         </div>
-        <div style="border:1px solid #bbf7d0;border-radius:10px;padding:12px;">
-          <div style="font-size:11px;color:#475569;margin-bottom:6px;">Stock actuel</div>
-          <div style="font-size:16px;font-weight:700;color:#16a34a;">${summary.currentStock.toFixed(3)}</div>
-        </div>
+
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Date</th>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Heure</th>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Type</th>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Quantité</th>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Stock</th>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Motif</th>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Réf.</th>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Utilisateur</th>
+              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Commande</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              rows ||
+              `<tr><td colspan="9" style="border:1px solid #e2e8f0;padding:10px;text-align:center;">Aucun mouvement</td></tr>`
+            }
+          </tbody>
+        </table>
       </div>
+    `;
 
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead>
-          <tr>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Date</th>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Heure</th>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Type</th>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Quantité</th>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Stock</th>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Motif</th>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Réf.</th>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Utilisateur</th>
-            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Commande</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows || `<tr><td colspan="9" style="border:1px solid #e2e8f0;padding:10px;text-align:center;">Aucun mouvement</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
+    document.body.appendChild(holder);
 
-  document.body.appendChild(holder);
+    const options = {
+      margin: [5, 5, 5, 5],
+      filename: `historique_${product.name.replace(/\s+/g, '_')}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: 800
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
 
-  const options = {
-    margin: [5, 5, 5, 5],
-    filename: `historique_${product.name.replace(/\s+/g, '_')}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      windowWidth: 800
-    },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    html2pdf()
+      .from(holder)
+      .set(options)
+      .save()
+      .then(() => document.body.removeChild(holder))
+      .catch(err => {
+        console.error('PDF error', err);
+        if (document.body.contains(holder)) document.body.removeChild(holder);
+        alert('Erreur lors de la génération du PDF');
+      });
   };
-
-  // ordre recommandé: from(...).set(...).save()
-  html2pdf().from(holder).set(options).save()
-    .then(() => document.body.removeChild(holder))
-    .catch(err => {
-      console.error('PDF error', err);
-      if (document.body.contains(holder)) document.body.removeChild(holder);
-      alert('Erreur lors de la génération du PDF');
-    });
-};
-
-  const chartData = []; // (si tu avais un mini graphe, garde ta logique existante)
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Historique du Stock" size="xl">
       <div className="space-y-6">
-        {/* En-tête */}
+        {/* Header résumé */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-700">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
@@ -324,8 +317,6 @@ const exportStockPDF = () => {
                 </p>
               </div>
             </div>
-
-            {/* 🔁 Export PDF (remplace Export CSV) */}
             <button
               onClick={exportStockPDF}
               className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
@@ -335,7 +326,6 @@ const exportStockPDF = () => {
             </button>
           </div>
 
-          {/* Résumé */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-600">
               <div className="text-lg font-bold text-blue-600">{summary.initialStock.toFixed(3)}</div>
@@ -346,7 +336,11 @@ const exportStockPDF = () => {
               <div className="text-xs text-red-700 dark:text-red-300">Total commandé</div>
             </div>
             <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-600">
-              <div className={`text-lg font-bold ${summary.totalAdjustments >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <div
+                className={`text-lg font-bold ${
+                  summary.totalAdjustments >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
                 {summary.totalAdjustments > 0 ? '+' : ''}
                 {summary.totalAdjustments.toFixed(3)}
               </div>
@@ -366,7 +360,7 @@ const exportStockPDF = () => {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Période</label>
               <select
                 value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
+                onChange={e => setSelectedPeriod(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               >
                 <option value="all">Toute la période</option>
@@ -377,10 +371,12 @@ const exportStockPDF = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type de mouvement</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Type de mouvement
+              </label>
               <select
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
+                onChange={e => setFilterType(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               >
                 <option value="all">Tous les mouvements</option>
@@ -390,7 +386,6 @@ const exportStockPDF = () => {
               </select>
             </div>
 
-            {/* 🔁 Export PDF (2e bouton – remplace celui en CSV) */}
             <div className="flex items-end">
               <button
                 onClick={exportStockPDF}
@@ -421,9 +416,7 @@ const exportStockPDF = () => {
                         <span className="font-medium text-gray-900 dark:text-gray-100">
                           {getMovementLabel(movement.type)}
                         </span>
-                        <span
-                          className={`font-bold ${getMovementColor(movement.quantity)}`}
-                        >
+                        <span className={`font-bold ${getMovementColor(movement.quantity ?? 0)}`}>
                           {(movement.quantity ?? 0) > 0 ? '+' : ''}
                           {Number(movement.quantity ?? 0).toFixed(3)} {product.unit}
                         </span>
@@ -431,9 +424,7 @@ const exportStockPDF = () => {
                       <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
                         <div className="flex items-center space-x-1">
                           <Calendar className="w-3 h-3" />
-                          <span>
-                            {new Date(movement.date).toLocaleDateString('fr-FR')}
-                          </span>
+                          <span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
@@ -465,13 +456,35 @@ const exportStockPDF = () => {
 
                       {movement.orderId && (
                         <button
-                          onClick={() => handleViewOrder(movement.orderId)}
+                          onClick={() => handleViewOrder(movement.orderId!)}
                           className="inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
                           title="Voir la commande"
                         >
                           <ExternalLink className="w-3 h-3" />
                           <span>Commande</span>
                         </button>
+                      )}
+
+                      {movement.orderDetails && (
+                        <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-700">
+                          <div className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                            <p>
+                              <strong>Commande:</strong> {movement.orderDetails.orderNumber}
+                            </p>
+                            <p>
+                              <strong>Client:</strong> {movement.orderDetails.clientName} (
+                              {movement.orderDetails.clientType === 'personne_physique' ? 'Particulier' : 'Société'})
+                            </p>
+                            <p>
+                              <strong>Total commande:</strong>{' '}
+                              {Number(movement.orderDetails.orderTotal || 0).toLocaleString()} MAD
+                            </p>
+                            <p>
+                              <strong>Date commande:</strong>{' '}
+                              {new Date(movement.orderDetails.orderDate).toLocaleDateString('fr-FR')}
+                            </p>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -497,15 +510,13 @@ const exportStockPDF = () => {
           </div>
         </div>
 
-        {/* Modal commande liée */}
+        {/* Modal Commande */}
         {viewingOrder && (
           <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
               <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    Détails de la Commande
-                  </h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Détails de la Commande</h3>
                   <button
                     onClick={() => setViewingOrder(null)}
                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -546,7 +557,7 @@ const exportStockPDF = () => {
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
                           <p className="font-medium text-gray-900 dark:text-gray-100">
-                            {Number(order.totalTTC ?? 0).toLocaleString()} MAD
+                            {Number(order.totalTTC || 0).toLocaleString()} MAD
                           </p>
                         </div>
                       </div>
@@ -554,9 +565,9 @@ const exportStockPDF = () => {
                       <div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Articles commandés</p>
                         <div className="space-y-2">
-                          {order.items.map((item, idx) => (
+                          {order.items.map((item, index) => (
                             <div
-                              key={idx}
+                              key={index}
                               className={`p-3 rounded-lg border ${
                                 item.productName === product.name
                                   ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
@@ -564,14 +575,18 @@ const exportStockPDF = () => {
                               }`}
                             >
                               <div className="flex justify-between items-center">
-                                <span className="font-medium text-gray-900 dark:text-gray-100">{item.productName}</span>
+                                <span className="font-medium text-gray-900 dark:text-gray-100">
+                                  {item.productName}
+                                </span>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">
                                   {item.quantity.toFixed(3)} × {item.unitPrice.toFixed(2)} MAD ={' '}
                                   {item.total.toFixed(2)} MAD
                                 </span>
                               </div>
                               {item.productName === product.name && (
-                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">← Ce produit dans cette commande</div>
+                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                  ← Ce produit dans cette commande
+                                </div>
                               )}
                             </div>
                           ))}
@@ -591,7 +606,7 @@ const exportStockPDF = () => {
                           rel="noopener noreferrer"
                           className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
                         >
-                          <FileText className="w-4 h-4" />
+                          <ExternalLink className="w-4 h-4" />
                           <span>Voir commande complète</span>
                         </a>
                       </div>
