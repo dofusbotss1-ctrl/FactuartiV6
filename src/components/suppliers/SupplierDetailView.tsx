@@ -252,7 +252,6 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
         3: { cellWidth: 30, halign: 'center' }, // HT
         4: { cellWidth: 30, halign: 'center' }, // TVA
         5: { cellWidth: 30, halign: 'center' }, // TTC
-        6: { cellWidth: 30, halign: 'center' } // Statut
       }
     });
 
