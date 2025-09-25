@@ -31,7 +31,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const [filterType, setFilterType] = useState('all');
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
-  // 1) Construire l'historique
+  // --------- Historique complet ----------
   const generateProductHistory = () => {
     const history: any[] = [];
 
@@ -92,7 +92,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const history = generateProductHistory();
 
-  // 2) Résumé
+  // --------- Résumé ----------
   const calculateCurrentStock = () => {
     const initialStock = product.initialStock || 0;
     const adjustments = stockMovements
@@ -131,7 +131,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     currentStock: calculateCurrentStock()
   };
 
-  // 3) Filtres
+  // --------- Filtres ----------
   const filteredHistory = history
     .filter(movement => {
       if (selectedPeriod === 'all') return true;
@@ -150,7 +150,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       return true;
     });
 
-  // 4) UI helpers
+  // --------- Aides UI ----------
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'initial':
@@ -182,8 +182,8 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
-  // 5) Export PDF fiable
-  const exportStockPDF = () => {
+  // --------- Export PDF (fix : rendu hors écran, pas d’opacité) ----------
+  const exportStockPDF = async () => {
     const nice = (v: number, d = 3) => Number(v ?? 0).toFixed(d);
     const qtyStyle = (q: number) =>
       q > 0 ? 'color:#16a34a;font-weight:700;' : q < 0 ? 'color:#dc2626;font-weight:700;' : '';
@@ -191,33 +191,30 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     const rows = filteredHistory
       .map(
         (h: any) => `
-      <tr>
-        <td style="border:1px solid #e2e8f0;padding:8px;">${new Date(h.date).toLocaleDateString('fr-FR')}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px;">${new Date(h.date).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px;">${getMovementLabel(h.type)}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px;${qtyStyle(h.quantity ?? 0)}">
-          ${(h.quantity ?? 0) > 0 ? '+' : ''}${nice(h.quantity)} ${product.unit}
-        </td>
-        <td style="border:1px solid #e2e8f0;padding:8px;">${nice(h.previousStock)} → <strong>${nice(h.newStock)}</strong></td>
-        <td style="border:1px solid #e2e8f0;padding:8px;">${h.reason || ''}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px;">${h.reference || ''}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px;">${h.userName || ''}</td>
-        <td style="border:1px solid #e2e8f0;padding:8px;">${h.orderDetails ? h.orderDetails.orderNumber : ''}</td>
-      </tr>`
+        <tr>
+          <td>${new Date(h.date).toLocaleDateString('fr-FR')}</td>
+          <td>${new Date(h.date).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
+          <td>${getMovementLabel(h.type)}</td>
+          <td style="${qtyStyle(h.quantity ?? 0)}">${(h.quantity ?? 0) > 0 ? '+' : ''}${nice(h.quantity)} ${product.unit}</td>
+          <td>${nice(h.previousStock)} → <strong>${nice(h.newStock)}</strong></td>
+          <td>${h.reason || ''}</td>
+          <td>${h.reference || ''}</td>
+          <td>${h.userName || ''}</td>
+          <td>${h.orderDetails ? h.orderDetails.orderNumber : ''}</td>
+        </tr>`
       )
       .join('');
 
     const holder = document.createElement('div');
+    holder.id = 'stock-pdf-holder';
     Object.assign(holder.style, {
       position: 'fixed',
       top: '0',
-      left: '0',
+      left: '-10000px',   // 👈 hors écran (visible pour html2canvas)
       width: '800px',
-      minHeight: '1200px',
       background: '#ffffff',
-      zIndex: '-1',
-      opacity: '0',
-      pointerEvents: 'none'
+      padding: '0',
+      display: 'block'
     } as CSSStyleDeclaration);
 
     holder.innerHTML = `
@@ -253,16 +250,16 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
           <thead>
-            <tr>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Date</th>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Heure</th>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Type</th>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Quantité</th>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Stock</th>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Motif</th>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Réf.</th>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Utilisateur</th>
-              <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Commande</th>
+            <tr style="background:#eff6ff;">
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Date</th>
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Heure</th>
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Type</th>
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Quantité</th>
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Stock</th>
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Motif</th>
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Réf.</th>
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Utilisateur</th>
+              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Commande</th>
             </tr>
           </thead>
           <tbody>
@@ -277,6 +274,9 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
     document.body.appendChild(holder);
 
+    // Laisser le navigateur calculer la mise en page avant capture
+    await new Promise(r => requestAnimationFrame(r));
+
     const options = {
       margin: [5, 5, 5, 5],
       filename: `historique_${product.name.replace(/\s+/g, '_')}.pdf`,
@@ -285,17 +285,17 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        windowWidth: 800
+        scrollY: 0
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
+    } as any;
 
     html2pdf()
       .from(holder)
       .set(options)
       .save()
       .then(() => document.body.removeChild(holder))
-      .catch(err => {
+      .catch((err: any) => {
         console.error('PDF error', err);
         if (document.body.contains(holder)) document.body.removeChild(holder);
         alert('Erreur lors de la génération du PDF');
@@ -305,7 +305,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Historique du Stock" size="xl">
       <div className="space-y-6">
-        {/* Header résumé */}
+        {/* En-tête & résumé */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-700">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
@@ -336,11 +336,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
               <div className="text-xs text-red-700 dark:text-red-300">Total commandé</div>
             </div>
             <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-600">
-              <div
-                className={`text-lg font-bold ${
-                  summary.totalAdjustments >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}
-              >
+              <div className={`text-lg font-bold ${summary.totalAdjustments >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {summary.totalAdjustments > 0 ? '+' : ''}
                 {summary.totalAdjustments.toFixed(3)}
               </div>
@@ -491,8 +487,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
                   <div className="text-right">
                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {Number(movement.previousStock ?? 0).toFixed(3)} →{' '}
-                      {Number(movement.newStock ?? 0).toFixed(3)}
+                      {Number(movement.previousStock ?? 0).toFixed(3)} → {Number(movement.newStock ?? 0).toFixed(3)}
                     </div>
                     <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
                   </div>
@@ -579,8 +574,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                                   {item.productName}
                                 </span>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                                  {item.quantity.toFixed(3)} × {item.unitPrice.toFixed(2)} MAD ={' '}
-                                  {item.total.toFixed(2)} MAD
+                                  {item.quantity.toFixed(3)} × {item.unitPrice.toFixed(2)} MAD = {item.total.toFixed(2)} MAD
                                 </span>
                               </div>
                               {item.productName === product.name && (
