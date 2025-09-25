@@ -140,16 +140,10 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
 
     const drawHeaderFooter = (pageNumber: number) => {
       let x = m, y = m;
-      if (logoDataUrl) {
-        try {
-          const imgType = logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-          doc.addImage(logoDataUrl, imgType as any, x, y, 18, 18);
-        } catch {}
-      }
+     
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
       doc.setTextColor(...COLORS.grayText);
-      doc.text(companyName, x + 22, y + 6);                   // Nom à droite du logo
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(107, 114, 128);
