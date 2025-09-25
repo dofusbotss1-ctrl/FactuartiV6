@@ -189,127 +189,123 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     quantity > 0 ? 'text-green-600' : quantity < 0 ? 'text-red-600' : 'text-gray-600';
 
   // -------- PDF (remplace l'export CSV) --------
-  const exportStockPDF = () => {
-    const nice = (v: number, d = 3) => Number(v ?? 0).toFixed(d);
-    const rows = filteredHistory
-      .map(
-        (h) => `
-        <tr>
-          <td>${new Date(h.date).toLocaleDateString('fr-FR')}</td>
-          <td>${new Date(h.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
-          <td>${getMovementLabel(h.type)}</td>
-          <td class="${(h.quantity ?? 0) > 0 ? 'pos' : (h.quantity ?? 0) < 0 ? 'neg' : ''}">
-            ${(h.quantity ?? 0) > 0 ? '+' : ''}${nice(h.quantity)} ${product.unit}
-          </td>
-          <td>${nice(h.previousStock)} → <strong>${nice(h.newStock)}</strong></td>
-          <td>${h.reason || ''}</td>
-          <td>${h.reference || ''}</td>
-          <td>${h.userName || ''}</td>
-          <td>${h.orderDetails ? h.orderDetails.orderNumber : ''}</td>
-        </tr>`
-      )
-      .join('');
+const exportStockPDF = () => {
+  const nice = (v: number, d = 3) => Number(v ?? 0).toFixed(d);
+  const qtyStyle = (q: number) =>
+    q > 0 ? 'color:#16a34a;font-weight:700;' : q < 0 ? 'color:#dc2626;font-weight:700;' : '';
 
-    const html = `
-    <!doctype html>
-    <html lang="fr">
-    <head>
-      <meta charset="utf-8" />
-      <title>Historique Stock - ${product.name}</title>
-      <style>
-        @page { size: A4; margin: 12mm; }
-        body { font-family: Arial, sans-serif; color:#0f172a; }
-        .header { text-align:center; border-bottom:3px solid #2563eb; padding-bottom:10px; margin-bottom:16px; }
-        .title { font-size:22px; font-weight:700; color:#1e293b; margin:0; }
-        .subtitle { color:#2563eb; font-weight:600; margin-top:4px; }
-        .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin:16px 0; }
-        .card { border:1px solid #c7d2fe; border-radius:10px; padding:12px; }
-        .card h4 { margin:0 0 6px 0; font-size:11px; color:#475569; }
-        .card .val { font-size:16px; font-weight:700; }
-        .blue { color:#2563eb; } .red{ color:#dc2626; } .green{ color:#16a34a; } .purple{ color:#7c3aed; }
-        table { width:100%; border-collapse:collapse; font-size:11px; }
-        thead th { text-align:left; background:#eff6ff; color:#0f172a; border:1px solid #e2e8f0; padding:8px; }
-        tbody td { border:1px solid #e2e8f0; padding:8px; vertical-align:top; }
-        .pos { color:#16a34a; font-weight:700; }
-        .neg { color:#dc2626; font-weight:700; }
-        .meta { font-size:11px; color:#475569; margin-top:4px; }
-        .foot { text-align:center; margin-top:10px; font-size:10px; color:#64748b; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h1 class="title">Historique du Stock</h1>
-        <div class="subtitle">${product.name} • ${product.category} • ${product.unit}</div>
-        <div class="meta">Période: ${
-          selectedPeriod === 'all'
-            ? 'Toute la période'
-            : selectedPeriod === 'week'
-            ? '7 derniers jours'
-            : selectedPeriod === 'month'
-            ? '30 derniers jours'
-            : '3 derniers mois'
-        } • Filtre: ${
-      { all: 'Tous', orders: 'Commandes', adjustments: 'Rectifications', initial: 'Stock initial' }[
-        filterType as 'all' | 'orders' | 'adjustments' | 'initial'
-      ]
-    }</div>
+  const rows = filteredHistory.map(h => `
+    <tr>
+      <td style="border:1px solid #e2e8f0;padding:8px;">
+        ${new Date(h.date).toLocaleDateString('fr-FR')}
+      </td>
+      <td style="border:1px solid #e2e8f0;padding:8px;">
+        ${new Date(h.date).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}
+      </td>
+      <td style="border:1px solid #e2e8f0;padding:8px;">${getMovementLabel(h.type)}</td>
+      <td style="border:1px solid #e2e8f0;padding:8px;${qtyStyle(h.quantity ?? 0)}">
+        ${(h.quantity ?? 0) > 0 ? '+' : ''}${nice(h.quantity)} ${product.unit}
+      </td>
+      <td style="border:1px solid #e2e8f0;padding:8px;">${nice(h.previousStock)} → <strong>${nice(h.newStock)}</strong></td>
+      <td style="border:1px solid #e2e8f0;padding:8px;">${h.reason || ''}</td>
+      <td style="border:1px solid #e2e8f0;padding:8px;">${h.reference || ''}</td>
+      <td style="border:1px solid #e2e8f0;padding:8px;">${h.userName || ''}</td>
+      <td style="border:1px solid #e2e8f0;padding:8px;">${h.orderDetails ? h.orderDetails.orderNumber : ''}</td>
+    </tr>
+  `).join('');
+
+  // conteneur invisible mais mesuré
+  const holder = document.createElement('div');
+  Object.assign(holder.style, {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '800px',          // largeur stable pour html2canvas
+    minHeight: '1200px',     // ~A4
+    background: '#ffffff',
+    zIndex: '-1',
+    opacity: '0',
+    pointerEvents: 'none'
+  });
+
+  holder.innerHTML = `
+    <div style="padding:20px;font-family:Arial,sans-serif;color:#0f172a;">
+      <div style="text-align:center;border-bottom:2px solid #2563eb;padding-bottom:8px;margin-bottom:14px;">
+        <div style="font-size:22px;font-weight:700;color:#1e293b;">Historique du Stock</div>
+        <div style="color:#2563eb;font-weight:600;margin-top:4px;">
+          ${product.name} • ${product.category} • ${product.unit}
+        </div>
+        <div style="font-size:12px;color:#475569;margin-top:4px;">
+          Généré le ${new Date().toLocaleString('fr-FR')}
+        </div>
       </div>
 
-      <div class="grid">
-        <div class="card"><h4>Stock initial</h4><div class="val blue">${summary.initialStock.toFixed(
-          3
-        )}</div></div>
-        <div class="card"><h4>Total commandé</h4><div class="val red">${summary.totalOrdersSold.toFixed(
-          3
-        )}</div></div>
-        <div class="card"><h4>Rectifications</h4><div class="val purple">${summary.totalAdjustments > 0 ? '+' : ''}${summary.totalAdjustments.toFixed(
-          3
-        )}</div></div>
-        <div class="card"><h4>Stock actuel</h4><div class="val green">${summary.currentStock.toFixed(
-          3
-        )}</div></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0;">
+        <div style="border:1px solid #c7d2fe;border-radius:10px;padding:12px;">
+          <div style="font-size:11px;color:#475569;margin-bottom:6px;">Stock initial</div>
+          <div style="font-size:16px;font-weight:700;color:#2563eb;">${summary.initialStock.toFixed(3)}</div>
+        </div>
+        <div style="border:1px solid #fecaca;border-radius:10px;padding:12px;">
+          <div style="font-size:11px;color:#475569;margin-bottom:6px;">Total commandé</div>
+          <div style="font-size:16px;font-weight:700;color:#dc2626;">${summary.totalOrdersSold.toFixed(3)}</div>
+        </div>
+        <div style="border:1px solid #e9d5ff;border-radius:10px;padding:12px;">
+          <div style="font-size:11px;color:#475569;margin-bottom:6px;">Rectifications</div>
+          <div style="font-size:16px;font-weight:700;color:#7c3aed;">
+            ${summary.totalAdjustments > 0 ? '+' : ''}${summary.totalAdjustments.toFixed(3)}
+          </div>
+        </div>
+        <div style="border:1px solid #bbf7d0;border-radius:10px;padding:12px;">
+          <div style="font-size:11px;color:#475569;margin-bottom:6px;">Stock actuel</div>
+          <div style="font-size:16px;font-weight:700;color:#16a34a;">${summary.currentStock.toFixed(3)}</div>
+        </div>
       </div>
 
-      <table>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Heure</th>
-            <th>Type</th>
-            <th>Quantité</th>
-            <th>Stock</th>
-            <th>Motif</th>
-            <th>Réf.</th>
-            <th>Utilisateur</th>
-            <th>Commande</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Date</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Heure</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Type</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Quantité</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Stock</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Motif</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Réf.</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Utilisateur</th>
+            <th style="text-align:left;background:#eff6ff;border:1px solid #e2e8f0;padding:8px;">Commande</th>
           </tr>
         </thead>
-        <tbody>${rows || `<tr><td colspan="9">Aucun mouvement</td></tr>`}</tbody>
+        <tbody>
+          ${rows || `<tr><td colspan="9" style="border:1px solid #e2e8f0;padding:10px;text-align:center;">Aucun mouvement</td></tr>`}
+        </tbody>
       </table>
+    </div>
+  `;
 
-      <div class="foot">Document généré le ${new Date().toLocaleString('fr-FR')}</div>
-    </body>
-    </html>`;
+  document.body.appendChild(holder);
 
-    const temp = document.createElement('div');
-    temp.style.position = 'fixed';
-    temp.style.left = '-99999px';
-    temp.innerHTML = html;
-    document.body.appendChild(temp);
-
-    html2pdf()
-      .set({
-        margin: [5, 5, 5, 5],
-        filename: `historique_${product.name.replace(/\s+/g, '_')}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      })
-      .from(temp)
-      .save()
-      .finally(() => document.body.removeChild(temp));
+  const options = {
+    margin: [5, 5, 5, 5],
+    filename: `historique_${product.name.replace(/\s+/g, '_')}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      windowWidth: 800
+    },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
-  // -------- fin PDF --------
+
+  // ordre recommandé: from(...).set(...).save()
+  html2pdf().from(holder).set(options).save()
+    .then(() => document.body.removeChild(holder))
+    .catch(err => {
+      console.error('PDF error', err);
+      if (document.body.contains(holder)) document.body.removeChild(holder);
+      alert('Erreur lors de la génération du PDF');
+    });
+};
 
   const chartData = []; // (si tu avais un mini graphe, garde ta logique existante)
 
