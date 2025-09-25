@@ -246,13 +246,13 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
       alternateRowStyles: { fillColor: COLORS.blueLight },
       // Largeurs adaptées à A4 (inner ~186mm)
       columnStyles: {
-        0: { cellWidth: 20 },                  // N°
-        1: { cellWidth: 20, halign: 'center' },// Date
-        2: { cellWidth: 20 },                  // Articles (wrap)
-        3: { cellWidth: 22, halign: 'center' }, // HT
-        4: { cellWidth: 20, halign: 'center' }, // TVA
-        5: { cellWidth: 22, halign: 'center' }, // TTC
-        6: { cellWidth: 20, halign: 'center' } // Statut
+        0: { cellWidth: 40 },                  // N°
+        1: { cellWidth: 40, halign: 'center' },// Date
+        2: { cellWidth: 40 },                  // Articles (wrap)
+        3: { cellWidth: 40, halign: 'center' }, // HT
+        4: { cellWidth: 40, halign: 'center' }, // TVA
+        5: { cellWidth: 40, halign: 'center' }, // TTC
+        6: { cellWidth: 40, halign: 'center' } // Statut
       }
     });
 
