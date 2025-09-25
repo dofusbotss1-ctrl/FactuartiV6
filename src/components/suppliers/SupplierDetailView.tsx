@@ -238,8 +238,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
             `${fmtMAD((o as any).subtotal)} MAD`,
             `${fmtMAD((o as any).totalVat)} MAD`,
             `${fmtMAD((o as any).totalTTC)} MAD`,
-            textOrDash((o as any).status)
-          ] as CellDef[]))
+          
         : [['-', '-', '-', '-', '-', '-', '-']]
       ),
       headStyles: { ...baseTableOpts.headStyles!, fillColor: COLORS.blue, textColor: [255, 255, 255] },
