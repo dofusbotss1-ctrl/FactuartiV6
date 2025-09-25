@@ -4,7 +4,8 @@ import { useData } from '../../contexts/DataContext';
 import { useOrder } from '../../contexts/OrderContext';
 import { Product } from '../../contexts/DataContext';
 import Modal from '../common/Modal';
-import html2pdf from 'html2pdf.js';
+import jsPDF from 'jspdf';
+import autoTable, { RowInput } from 'jspdf-autotable';
 import {
   Package,
   RotateCcw,
@@ -31,7 +32,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const [filterType, setFilterType] = useState('all');
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
-  // --------- Historique complet ----------
+  // ---------- Historique ----------
   const generateProductHistory = () => {
     const history: any[] = [];
 
@@ -52,38 +53,38 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     }
 
     const adjustments = stockMovements.filter(m => m.productId === product.id && m.type === 'adjustment');
-    adjustments.forEach(movement => {
+    adjustments.forEach(m => {
       history.push({
-        id: movement.id,
-        type: movement.type,
-        date: movement.adjustmentDateTime || movement.date,
-        quantity: movement.quantity,
-        previousStock: movement.previousStock,
-        newStock: movement.newStock,
-        reason: movement.reason || 'Mouvement',
-        userName: movement.userName,
-        reference: movement.reference || '',
-        orderId: movement.orderId || null,
-        orderDetails: movement.orderDetails || null
+        id: m.id,
+        type: m.type,
+        date: m.adjustmentDateTime || m.date,
+        quantity: m.quantity,
+        previousStock: m.previousStock,
+        newStock: m.newStock,
+        reason: m.reason || 'Rectification',
+        userName: m.userName,
+        reference: m.reference || '',
+        orderId: m.orderId || null,
+        orderDetails: m.orderDetails || null
       });
     });
 
     const orderMoves = stockMovements.filter(
       m => m.productId === product.id && (m.type === 'order_out' || m.type === 'order_cancel_return')
     );
-    orderMoves.forEach(movement => {
+    orderMoves.forEach(m => {
       history.push({
-        id: movement.id,
-        type: movement.type,
-        date: movement.adjustmentDateTime || movement.date,
-        quantity: movement.quantity,
-        previousStock: movement.previousStock,
-        newStock: movement.newStock,
-        reason: movement.reason || (movement.type === 'order_out' ? 'Commande livrée' : 'Commande annulée'),
-        userName: movement.userName,
-        reference: movement.reference || '',
-        orderId: movement.orderId || null,
-        orderDetails: movement.orderDetails || null
+        id: m.id,
+        type: m.type,
+        date: m.adjustmentDateTime || m.date,
+        quantity: m.quantity,
+        previousStock: m.previousStock,
+        newStock: m.newStock,
+        reason: m.type === 'order_out' ? 'Commande livrée' : 'Commande annulée',
+        userName: m.userName,
+        reference: m.reference || '',
+        orderId: m.orderId || null,
+        orderDetails: m.orderDetails || null
       });
     });
 
@@ -92,24 +93,24 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const history = generateProductHistory();
 
-  // --------- Résumé ----------
+  // ---------- Résumé ----------
   const calculateCurrentStock = () => {
-    const initialStock = product.initialStock || 0;
+    const initial = product.initialStock || 0;
     const adjustments = stockMovements
       .filter(m => m.productId === product.id && m.type === 'adjustment')
-      .reduce((sum, m) => sum + (m.quantity || 0), 0);
-    const deliveredOrders = orders.reduce((sum, order) => {
+      .reduce((s, m) => s + (m.quantity || 0), 0);
+    const delivered = orders.reduce((sum, order) => {
       if (order.status === 'livre') {
         return (
           sum +
           order.items
-            .filter(item => item.productName === product.name)
-            .reduce((s, it) => s + (it.quantity || 0), 0)
+            .filter(i => i.productName === product.name)
+            .reduce((x, i) => x + (i.quantity || 0), 0)
         );
       }
       return sum;
     }, 0);
-    return initialStock + adjustments - deliveredOrders;
+    return initial + adjustments - delivered;
   };
 
   const summary = {
@@ -119,27 +120,27 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         return (
           sum +
           order.items
-            .filter(item => item.productName === product.name)
-            .reduce((s, it) => s + (it.quantity || 0), 0)
+            .filter(i => i.productName === product.name)
+            .reduce((x, i) => x + (i.quantity || 0), 0)
         );
       }
       return sum;
     }, 0),
     totalAdjustments: stockMovements
       .filter(m => m.productId === product.id && m.type === 'adjustment')
-      .reduce((sum, m) => sum + (m.quantity || 0), 0),
+      .reduce((s, m) => s + (m.quantity || 0), 0),
     currentStock: calculateCurrentStock()
   };
 
-  // --------- Filtres ----------
+  // ---------- Filtres ----------
   const filteredHistory = history
     .filter(movement => {
       if (selectedPeriod === 'all') return true;
-      const movementDate = new Date(movement.date);
-      const now = new Date();
-      if (selectedPeriod === 'week') return movementDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      if (selectedPeriod === 'month') return movementDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      if (selectedPeriod === 'quarter') return movementDate >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const d = new Date(movement.date).getTime();
+      const now = Date.now();
+      if (selectedPeriod === 'week') return d >= now - 7 * 24 * 60 * 60 * 1000;
+      if (selectedPeriod === 'month') return d >= now - 30 * 24 * 60 * 60 * 1000;
+      if (selectedPeriod === 'quarter') return d >= now - 90 * 24 * 60 * 60 * 1000;
       return true;
     })
     .filter(movement => {
@@ -150,7 +151,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       return true;
     });
 
-  // --------- Aides UI ----------
+  // ---------- UI helpers ----------
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'initial':
@@ -182,124 +183,135 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
-  // --------- Export PDF (fix : rendu hors écran, pas d’opacité) ----------
-  const exportStockPDF = async () => {
-    const nice = (v: number, d = 3) => Number(v ?? 0).toFixed(d);
-    const qtyStyle = (q: number) =>
-      q > 0 ? 'color:#16a34a;font-weight:700;' : q < 0 ? 'color:#dc2626;font-weight:700;' : '';
+  // ---------- Export PDF avec jsPDF (FIABLE) ----------
+  const exportStockPDF = () => {
+    const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true }); // 595x842 pt
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let y = 40;
 
-    const rows = filteredHistory
-      .map(
-        (h: any) => `
-        <tr>
-          <td>${new Date(h.date).toLocaleDateString('fr-FR')}</td>
-          <td>${new Date(h.date).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</td>
-          <td>${getMovementLabel(h.type)}</td>
-          <td style="${qtyStyle(h.quantity ?? 0)}">${(h.quantity ?? 0) > 0 ? '+' : ''}${nice(h.quantity)} ${product.unit}</td>
-          <td>${nice(h.previousStock)} → <strong>${nice(h.newStock)}</strong></td>
-          <td>${h.reason || ''}</td>
-          <td>${h.reference || ''}</td>
-          <td>${h.userName || ''}</td>
-          <td>${h.orderDetails ? h.orderDetails.orderNumber : ''}</td>
-        </tr>`
-      )
-      .join('');
+    // En-tête
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Historique du Stock', pageWidth / 2, y, { align: 'center' });
+    y += 18;
 
-    const holder = document.createElement('div');
-    holder.id = 'stock-pdf-holder';
-    Object.assign(holder.style, {
-      position: 'fixed',
-      top: '0',
-      left: '-10000px',   // 👈 hors écran (visible pour html2canvas)
-      width: '800px',
-      background: '#ffffff',
-      padding: '0',
-      display: 'block'
-    } as CSSStyleDeclaration);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(37, 99, 235); // bleu
+    doc.text(`${product.name} • ${product.category} • ${product.unit}`, pageWidth / 2, y, { align: 'center' });
+    y += 14;
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}`, pageWidth / 2, y, { align: 'center' });
+    y += 24;
 
-    holder.innerHTML = `
-      <div style="padding:20px;font-family:Arial,sans-serif;color:#0f172a;">
-        <div style="text-align:center;border-bottom:2px solid #2563eb;padding-bottom:8px;margin-bottom:14px;">
-          <div style="font-size:22px;font-weight:700;color:#1e293b;">Historique du Stock</div>
-          <div style="color:#2563eb;font-weight:600;margin-top:4px;">
-            ${product.name} • ${product.category} • ${product.unit}
-          </div>
-          <div style="font-size:12px;color:#475569;margin-top:4px;">Généré le ${new Date().toLocaleString('fr-FR')}</div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0;">
-          <div style="border:1px solid #c7d2fe;border-radius:10px;padding:12px;">
-            <div style="font-size:11px;color:#475569;margin-bottom:6px;">Stock initial</div>
-            <div style="font-size:16px;font-weight:700;color:#2563eb;">${summary.initialStock.toFixed(3)}</div>
-          </div>
-          <div style="border:1px solid #fecaca;border-radius:10px;padding:12px;">
-            <div style="font-size:11px;color:#475569;margin-bottom:6px;">Total commandé</div>
-            <div style="font-size:16px;font-weight:700;color:#dc2626;">${summary.totalOrdersSold.toFixed(3)}</div>
-          </div>
-          <div style="border:1px solid #e9d5ff;border-radius:10px;padding:12px;">
-            <div style="font-size:11px;color:#475569;margin-bottom:6px;">Rectifications</div>
-            <div style="font-size:16px;font-weight:700;color:#7c3aed;">
-              ${summary.totalAdjustments > 0 ? '+' : ''}${summary.totalAdjustments.toFixed(3)}
-            </div>
-          </div>
-          <div style="border:1px solid #bbf7d0;border-radius:10px;padding:12px;">
-            <div style="font-size:11px;color:#475569;margin-bottom:6px;">Stock actuel</div>
-            <div style="font-size:16px;font-weight:700;color:#16a34a;">${summary.currentStock.toFixed(3)}</div>
-          </div>
-        </div>
-
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead>
-            <tr style="background:#eff6ff;">
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Date</th>
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Heure</th>
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Type</th>
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Quantité</th>
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Stock</th>
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Motif</th>
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Réf.</th>
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Utilisateur</th>
-              <th style="text-align:left;border:1px solid #e2e8f0;padding:8px;">Commande</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              rows ||
-              `<tr><td colspan="9" style="border:1px solid #e2e8f0;padding:10px;text-align:center;">Aucun mouvement</td></tr>`
-            }
-          </tbody>
-        </table>
-      </div>
-    `;
-
-    document.body.appendChild(holder);
-
-    // Laisser le navigateur calculer la mise en page avant capture
-    await new Promise(r => requestAnimationFrame(r));
-
-    const options = {
-      margin: [5, 5, 5, 5],
-      filename: `historique_${product.name.replace(/\s+/g, '_')}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        scrollY: 0
+    // Cartes résumé
+    const cardW = (pageWidth - 80 - 30 * 3) / 4; // marges 40 + gaps
+    const cardH = 56;
+    const startX = 40;
+    const cards = [
+      { label: 'Stock initial', value: summary.initialStock.toFixed(3), color: [37, 99, 235] },
+      { label: 'Total commandé', value: summary.totalOrdersSold.toFixed(3), color: [220, 38, 38] },
+      {
+        label: 'Rectifications',
+        value: `${summary.totalAdjustments > 0 ? '+' : ''}${summary.totalAdjustments.toFixed(3)}`,
+        color: [124, 58, 237]
       },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    } as any;
+      { label: 'Stock actuel', value: summary.currentStock.toFixed(3), color: [22, 163, 74] }
+    ];
 
-    html2pdf()
-      .from(holder)
-      .set(options)
-      .save()
-      .then(() => document.body.removeChild(holder))
-      .catch((err: any) => {
-        console.error('PDF error', err);
-        if (document.body.contains(holder)) document.body.removeChild(holder);
-        alert('Erreur lors de la génération du PDF');
-      });
+    cards.forEach((c, i) => {
+      const x = startX + i * (cardW + 30);
+      // boîte
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(1);
+      doc.roundedRect(x, y, cardW, cardH, 8, 8);
+      // label
+      doc.setFontSize(10);
+      doc.setTextColor(71, 85, 105);
+      doc.text(c.label, x + 10, y + 18);
+      // value
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(c.color[0], c.color[1], c.color[2]);
+      doc.text(c.value, x + 10, y + 38);
+      doc.setFont('helvetica', 'normal');
+    });
+
+    y += cardH + 24;
+
+    // Tableau historique
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Mouvements', 40, y);
+    y += 6;
+
+    const body: RowInput[] =
+      filteredHistory.length === 0
+        ? [['—', '—', '—', '—', '—', '—', '—', '—', '—']]
+        : filteredHistory.map(h => {
+            const date = new Date(h.date);
+            const qty = Number(h.quantity ?? 0);
+            const qtyText = `${qty > 0 ? '+' : ''}${qty.toFixed(3)} ${product.unit}`;
+            const stockText = `${Number(h.previousStock ?? 0).toFixed(3)} → ${Number(h.newStock ?? 0).toFixed(3)}`;
+            return [
+              date.toLocaleDateString('fr-FR'),
+              date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              getMovementLabel(h.type),
+              qtyText,
+              stockText,
+              h.reason || '',
+              h.reference || '',
+              h.userName || '',
+              h.orderDetails ? h.orderDetails.orderNumber : ''
+            ];
+          });
+
+    autoTable(doc, {
+      startY: y + 10,
+      head: [
+        [
+          'Date',
+          'Heure',
+          'Type',
+          'Quantité',
+          'Stock',
+          'Motif',
+          'Réf.',
+          'Utilisateur',
+          'Commande'
+        ]
+      ],
+      body,
+      styles: { font: 'helvetica', fontSize: 9, cellPadding: 5, valign: 'middle' },
+      headStyles: { fillColor: [239, 246, 255], textColor: [15, 23, 42], lineColor: [226, 232, 240] },
+      bodyStyles: { lineColor: [226, 232, 240] },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      theme: 'grid',
+      columnStyles: {
+        0: { cellWidth: 58 },
+        1: { cellWidth: 42 },
+        2: { cellWidth: 80 },
+        3: { cellWidth: 70 },
+        4: { cellWidth: 85 },
+        5: { cellWidth: 90 },
+        6: { cellWidth: 45 },
+        7: { cellWidth: 70 },
+        8: { cellWidth: 70 }
+      },
+      didParseCell: data => {
+        // colorer quantité +/-
+        if (data.section === 'body' && data.column.index === 3) {
+          const txt = String(data.cell.raw || '');
+          if (txt.startsWith('+')) data.cell.styles.textColor = [22, 163, 74];
+          else if (txt.startsWith('-')) data.cell.styles.textColor = [220, 38, 38];
+        }
+      }
+    });
+
+    // Nom et téléchargement
+    const filename = `historique_${product.name.replace(/\s+/g, '_')}.pdf`;
+    doc.save(filename);
   };
 
   return (
@@ -394,7 +406,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Liste des mouvements */}
+        {/* Liste mouvements */}
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {filteredHistory.length > 0 ? (
