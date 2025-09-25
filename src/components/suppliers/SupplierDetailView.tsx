@@ -229,7 +229,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     autoTable(doc, {
       ...baseTableOpts,
       startY: y + 16,
-      head: [['N°', 'Date', 'Articles (Nom × Qté)', 'Sous-total HT', 'TVA', 'Total TTC']],
+      head: [['N°', 'Date', '(Nom produit-Qté)', 'Sous-total HT', 'TVA', 'Total TTC']],
       body: (supplierOrders.length
         ? supplierOrders.map<RowInput>((o) => ([
             textOrDash(o.number),
