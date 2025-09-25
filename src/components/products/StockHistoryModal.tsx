@@ -360,7 +360,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         1: { cellWidth: 110 }, // Type
         2: { cellWidth: 90 },  // Quantité
         3: { cellWidth: 120 }, // Stock
-        4: { cellWidth: 300 }, // Motif
+        4: { cellWidth: 150 }, // Motif
         5: { cellWidth: 80 }   // Réf.
       },
       didParseCell: data => {
