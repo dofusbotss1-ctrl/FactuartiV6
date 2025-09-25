@@ -32,7 +32,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const [filterType, setFilterType] = useState('all');
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
-  // ---------- Historique ----------
+  // ------- Historique complet du produit -------
   const generateProductHistory = () => {
     const history: any[] = [];
 
@@ -93,7 +93,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const history = generateProductHistory();
 
-  // ---------- Résumé ----------
+  // ------- Résumé -------
   const calculateCurrentStock = () => {
     const initial = product.initialStock || 0;
     const adjustments = stockMovements
@@ -132,7 +132,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     currentStock: calculateCurrentStock()
   };
 
-  // ---------- Filtres ----------
+  // ------- Filtres -------
   const filteredHistory = history
     .filter(movement => {
       if (selectedPeriod === 'all') return true;
@@ -151,7 +151,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       return true;
     });
 
-  // ---------- UI helpers ----------
+  // ------- Helpers UI -------
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'initial':
@@ -183,31 +183,35 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
-  // ---------- Export PDF avec jsPDF (FIABLE) ----------
+  // ------- Export PDF (A4 paysage, colonnes qui tiennent) -------
   const exportStockPDF = () => {
-    const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true }); // 595x842 pt
+    // A4 paysage pour plus de largeur
+    const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
+    const lrMargin = 40;                           // marge gauche/droite
+    const usableWidth = pageWidth - lrMargin * 2;  // largeur utile
     let y = 40;
 
     // En-tête
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
+    doc.setFontSize(22);
     doc.text('Historique du Stock', pageWidth / 2, y, { align: 'center' });
-    y += 18;
+    y += 22;
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    doc.setTextColor(37, 99, 235); // bleu
+    doc.setFontSize(12);
+    doc.setTextColor(37, 99, 235);
     doc.text(`${product.name} • ${product.category} • ${product.unit}`, pageWidth / 2, y, { align: 'center' });
-    y += 14;
+    y += 16;
     doc.setTextColor(71, 85, 105);
     doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}`, pageWidth / 2, y, { align: 'center' });
-    y += 24;
+    y += 26;
 
-    // Cartes résumé
-    const cardW = (pageWidth - 80 - 30 * 3) / 4; // marges 40 + gaps
-    const cardH = 56;
-    const startX = 40;
+    // Cartes résumé (s'adaptent à la largeur paysage)
+    const gap = 30;
+    const cardW = (usableWidth - gap * 3) / 4;
+    const cardH = 64;
+    const startX = lrMargin;
     const cards = [
       { label: 'Stock initial', value: summary.initialStock.toFixed(3), color: [37, 99, 235] },
       { label: 'Total commandé', value: summary.totalOrdersSold.toFixed(3), color: [220, 38, 38] },
@@ -220,32 +224,30 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     ];
 
     cards.forEach((c, i) => {
-      const x = startX + i * (cardW + 30);
-      // boîte
+      const x = startX + i * (cardW + gap);
       doc.setDrawColor(226, 232, 240);
       doc.setLineWidth(1);
-      doc.roundedRect(x, y, cardW, cardH, 8, 8);
-      // label
+      doc.roundedRect(x, y, cardW, cardH, 10, 10);
       doc.setFontSize(10);
       doc.setTextColor(71, 85, 105);
-      doc.text(c.label, x + 10, y + 18);
-      // value
-      doc.setFontSize(14);
+      doc.text(c.label, x + 12, y + 20);
       doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
       doc.setTextColor(c.color[0], c.color[1], c.color[2]);
-      doc.text(c.value, x + 10, y + 38);
+      doc.text(c.value, x + 12, y + 42);
       doc.setFont('helvetica', 'normal');
     });
 
     y += cardH + 24;
 
-    // Tableau historique
+    // Titre section
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('Mouvements', 40, y);
-    y += 6;
+    doc.setFontSize(14);
+    doc.text('Mouvements', lrMargin, y);
+    y += 8;
 
+    // Données du tableau
     const body: RowInput[] =
       filteredHistory.length === 0
         ? [['—', '—', '—', '—', '—', '—', '—', '—', '—']]
@@ -267,40 +269,31 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             ];
           });
 
+    // Tableau qui respecte la largeur utile
     autoTable(doc, {
       startY: y + 10,
-      head: [
-        [
-          'Date',
-          'Heure',
-          'Type',
-          'Quantité',
-          'Stock',
-          'Motif',
-          'Réf.',
-          'Utilisateur',
-          'Commande'
-        ]
-      ],
+      head: [[ 'Date', 'Heure', 'Type', 'Quantité', 'Stock', 'Motif', 'Réf.', 'Utilisateur', 'Commande' ]],
       body,
-      styles: { font: 'helvetica', fontSize: 9, cellPadding: 5, valign: 'middle' },
+      margin: { left: lrMargin, right: lrMargin },
+      tableWidth: usableWidth,
+      styles: { font: 'helvetica', fontSize: 9, cellPadding: 4, overflow: 'linebreak', valign: 'middle' },
       headStyles: { fillColor: [239, 246, 255], textColor: [15, 23, 42], lineColor: [226, 232, 240] },
       bodyStyles: { lineColor: [226, 232, 240] },
       alternateRowStyles: { fillColor: [250, 250, 250] },
       theme: 'grid',
+      // Largeurs TOTAL <= usableWidth (paysage)
       columnStyles: {
-        0: { cellWidth: 58 },
-        1: { cellWidth: 42 },
-        2: { cellWidth: 80 },
-        3: { cellWidth: 70 },
-        4: { cellWidth: 85 },
-        5: { cellWidth: 90 },
-        6: { cellWidth: 45 },
-        7: { cellWidth: 70 },
-        8: { cellWidth: 70 }
+        0: { cellWidth: 70 },   // Date
+        1: { cellWidth: 50 },   // Heure
+        2: { cellWidth: 110 },  // Type
+        3: { cellWidth: 85 },   // Quantité
+        4: { cellWidth: 110 },  // Stock
+        5: { cellWidth: 170 },  // Motif
+        6: { cellWidth: 65 },   // Réf
+        7: { cellWidth: 90 },   // Utilisateur
+        8: { cellWidth: 100 }   // Commande
       },
       didParseCell: data => {
-        // colorer quantité +/-
         if (data.section === 'body' && data.column.index === 3) {
           const txt = String(data.cell.raw || '');
           if (txt.startsWith('+')) data.cell.styles.textColor = [22, 163, 74];
@@ -309,7 +302,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       }
     });
 
-    // Nom et téléchargement
+    // Téléchargement
     const filename = `historique_${product.name.replace(/\s+/g, '_')}.pdf`;
     doc.save(filename);
   };
@@ -476,21 +469,10 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                       {movement.orderDetails && (
                         <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-700">
                           <div className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
-                            <p>
-                              <strong>Commande:</strong> {movement.orderDetails.orderNumber}
-                            </p>
-                            <p>
-                              <strong>Client:</strong> {movement.orderDetails.clientName} (
-                              {movement.orderDetails.clientType === 'personne_physique' ? 'Particulier' : 'Société'})
-                            </p>
-                            <p>
-                              <strong>Total commande:</strong>{' '}
-                              {Number(movement.orderDetails.orderTotal || 0).toLocaleString()} MAD
-                            </p>
-                            <p>
-                              <strong>Date commande:</strong>{' '}
-                              {new Date(movement.orderDetails.orderDate).toLocaleDateString('fr-FR')}
-                            </p>
+                            <p><strong>Commande:</strong> {movement.orderDetails.orderNumber}</p>
+                            <p><strong>Client:</strong> {movement.orderDetails.clientName} ({movement.orderDetails.clientType === 'personne_physique' ? 'Particulier' : 'Société'})</p>
+                            <p><strong>Total commande:</strong> {Number(movement.orderDetails.orderTotal || 0).toLocaleString()} MAD</p>
+                            <p><strong>Date commande:</strong> {new Date(movement.orderDetails.orderDate).toLocaleDateString('fr-FR')}</p>
                           </div>
                         </div>
                       )}
@@ -517,7 +499,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Modal Commande */}
+        {/* Modal commande liée */}
         {viewingOrder && (
           <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -536,11 +518,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                 {(() => {
                   const order = getOrderById(viewingOrder);
                   if (!order) {
-                    return (
-                      <div className="text-center py-8">
-                        <p className="text-gray-500 dark:text-gray-400">Commande non trouvée</p>
-                      </div>
-                    );
+                    return <div className="text-center py-8"><p className="text-gray-500 dark:text-gray-400">Commande non trouvée</p></div>;
                   }
                   return (
                     <div className="space-y-4">
@@ -551,9 +529,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Date</p>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">
-                            {new Date(order.orderDate).toLocaleDateString('fr-FR')}
-                          </p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{new Date(order.orderDate).toLocaleDateString('fr-FR')}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Client</p>
@@ -563,9 +539,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                         </div>
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">
-                            {Number(order.totalTTC || 0).toLocaleString()} MAD
-                          </p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{Number(order.totalTTC || 0).toLocaleString()} MAD</p>
                         </div>
                       </div>
 
@@ -582,17 +556,13 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                               }`}
                             >
                               <div className="flex justify-between items-center">
-                                <span className="font-medium text-gray-900 dark:text-gray-100">
-                                  {item.productName}
-                                </span>
+                                <span className="font-medium text-gray-900 dark:text-gray-100">{item.productName}</span>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">
                                   {item.quantity.toFixed(3)} × {item.unitPrice.toFixed(2)} MAD = {item.total.toFixed(2)} MAD
                                 </span>
                               </div>
                               {item.productName === product.name && (
-                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                                  ← Ce produit dans cette commande
-                                </div>
+                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">← Ce produit dans cette commande</div>
                               )}
                             </div>
                           ))}
