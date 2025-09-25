@@ -193,9 +193,6 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
         ['ICE', textOrDash((supplier as any).ice)],
         ['Contact', textOrDash((supplier as any).contactPerson)],
         ['Téléphone', textOrDash((supplier as any).phone)],
-        ['Email', textOrDash((supplier as any).email)],
-        ['Adresse', textOrDash((supplier as any).address)],
-        ['Délai de paiement (jours)', String((supplier as any).paymentTerms ?? '-')],
       ],
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 }, 1: { cellWidth: 'auto' } }
     });
@@ -228,7 +225,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     y = (doc as any).lastAutoTable?.finalY ?? (m + headerH + 14);
 
     // 3) Commandes — **Ajout colonne "Articles (Nom × Qté)"**
-    drawCenteredTitle(doc, '📦 Commandes', y + 12, COLORS.blue);
+    drawCenteredTitle(doc, 'Commandes', y + 12, COLORS.blue);
     autoTable(doc, {
       ...baseTableOpts,
       startY: y + 16,
@@ -251,10 +248,10 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
       columnStyles: {
         0: { cellWidth: 20 },                  // N°
         1: { cellWidth: 20, halign: 'center' },// Date
-        2: { cellWidth: 76 },                  // Articles (wrap)
-        3: { cellWidth: 22, halign: 'right' }, // HT
-        4: { cellWidth: 14, halign: 'right' }, // TVA
-        5: { cellWidth: 22, halign: 'right' }, // TTC
+        2: { cellWidth: 30 },                  // Articles (wrap)
+        3: { cellWidth: 22, halign: 'center' }, // HT
+        4: { cellWidth: 14, halign: 'center' }, // TVA
+        5: { cellWidth: 22, halign: 'center' }, // TTC
         6: { cellWidth: 12, halign: 'center' } // Statut
       }
     });
