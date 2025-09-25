@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useData } from '../../contexts/DataContext';
 import { useOrder } from '../../contexts/OrderContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Product } from '../../contexts/DataContext';
 import Modal from '../common/Modal';
 import jsPDF from 'jspdf';
@@ -28,8 +29,15 @@ interface StockHistoryModalProps {
 export default function StockHistoryModal({ isOpen, onClose, product }: StockHistoryModalProps) {
   const { stockMovements } = useData();
   const { orders, getOrderById } = useOrder();
-  const [selectedPeriod, setSelectedPeriod] = useState('all');
-  const [filterType, setFilterType] = useState('all');
+  const { user } = useAuth();
+
+  const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'week' | 'month' | 'quarter'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'orders' | 'adjustments' | 'initial'>('all');
+
+  // ✅ nouveaux filtres dates
+  const [startDate, setStartDate] = useState<string>(''); // yyyy-mm-dd
+  const [endDate, setEndDate] = useState<string>('');     // yyyy-mm-dd
+
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
   // ------- Historique complet du produit -------
@@ -133,23 +141,41 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   };
 
   // ------- Filtres -------
-  const filteredHistory = history
-    .filter(movement => {
-      if (selectedPeriod === 'all') return true;
-      const d = new Date(movement.date).getTime();
-      const now = Date.now();
-      if (selectedPeriod === 'week') return d >= now - 7 * 24 * 60 * 60 * 1000;
-      if (selectedPeriod === 'month') return d >= now - 30 * 24 * 60 * 60 * 1000;
-      if (selectedPeriod === 'quarter') return d >= now - 90 * 24 * 60 * 60 * 1000;
-      return true;
-    })
-    .filter(movement => {
-      if (filterType === 'all') return true;
-      if (filterType === 'orders') return movement.type === 'order_out' || movement.type === 'order_cancel_return';
-      if (filterType === 'adjustments') return movement.type === 'adjustment';
-      if (filterType === 'initial') return movement.type === 'initial';
-      return true;
-    });
+  const inPeriod = (dateStr: string) => {
+    if (selectedPeriod === 'all') return true;
+    const d = new Date(dateStr).getTime();
+    const now = Date.now();
+    if (selectedPeriod === 'week') return d >= now - 7 * 24 * 60 * 60 * 1000;
+    if (selectedPeriod === 'month') return d >= now - 30 * 24 * 60 * 60 * 1000;
+    if (selectedPeriod === 'quarter') return d >= now - 90 * 24 * 60 * 60 * 1000;
+    return true;
+  };
+
+  const inRange = (dateStr: string) => {
+    if (!startDate && !endDate) return true;
+    const d = new Date(dateStr);
+    if (startDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      if (d < s) return false;
+    }
+    if (endDate) {
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
+      if (d > e) return false;
+    }
+    return true;
+  };
+
+  const typeOK = (t: string) => {
+    if (filterType === 'all') return true;
+    if (filterType === 'orders') return t === 'order_out' || t === 'order_cancel_return';
+    if (filterType === 'adjustments') return t === 'adjustment';
+    if (filterType === 'initial') return t === 'initial';
+    return true;
+  };
+
+  const filteredHistory = history.filter(m => inPeriod(m.date) && inRange(m.date) && typeOK(m.type));
 
   // ------- Helpers UI -------
   const getMovementIcon = (type: string) => {
@@ -183,28 +209,76 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
-  // ------- Export PDF (Date+Heure fusionnées, colonne Utilisateur retirée) -------
-  const exportStockPDF = () => {
+  // ------- helpers image logo -> dataURL -------
+  const loadImageAsDataURL = (url: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve('');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(''); // on ignore si échec
+        img.src = url;
+      } catch {
+        resolve('');
+      }
+    });
+
+  // ------- Export PDF (Date+Heure fusionnées, sans Utilisateur, sans Commande) -------
+  const exportStockPDF = async () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
     const lrMargin = 40;
     const usableWidth = pageWidth - lrMargin * 2;
-    let y = 40;
+    let y = 36;
 
-    // En-tête
+    // En-tête gauche : société
+    const companyName = user?.company?.name || '';
+    const logoUrl = (user?.company as any)?.logo || (user?.company as any)?.logoUrl || '';
+    if (companyName) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42);
+      doc.text(companyName, lrMargin, y);
+    }
+
+    // En-tête droite : logo (optionnel)
+    if (logoUrl) {
+      const dataUrl = await loadImageAsDataURL(logoUrl);
+      if (dataUrl) {
+        const imgW = 90;
+        const imgH = 30;
+        doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - imgW, y - imgH + 6, imgW, imgH, undefined, 'FAST');
+      }
+    }
+
+    // Titre centré
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42);
     doc.text('Historique du Stock', pageWidth / 2, y, { align: 'center' });
-    y += 22;
+    y += 20;
 
+    // Sous-titre
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(12);
     doc.setTextColor(37, 99, 235);
     doc.text(`${product.name} • ${product.category} • ${product.unit}`, pageWidth / 2, y, { align: 'center' });
     y += 16;
     doc.setTextColor(71, 85, 105);
-    doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}`, pageWidth / 2, y, { align: 'center' });
-    y += 26;
+    const filtDates =
+      startDate || endDate
+        ? ` • Période: ${startDate || '…'} → ${endDate || '…'}`
+        : '';
+    doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}${filtDates}`, pageWidth / 2, y, { align: 'center' });
+    y += 24;
 
     // Cartes résumé
     const gap = 30;
@@ -237,7 +311,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       doc.setFont('helvetica', 'normal');
     });
 
-    y += cardH + 24;
+    y += cardH + 20;
 
     // Titre section
     doc.setTextColor(15, 23, 42);
@@ -246,10 +320,10 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     doc.text('Mouvements', lrMargin, y);
     y += 8;
 
-    // Corps du tableau — Date & Heure fusionnées, pas de "Utilisateur"
+    // Corps du tableau — Date & Heure fusionnées, pas de "Utilisateur", pas de "Commande"
     const body: RowInput[] =
       filteredHistory.length === 0
-        ? [['—', '—', '—', '—', '—', '—', '—']]
+        ? [['—', '—', '—', '—', '—', '—']]
         : filteredHistory.map(h => {
             const d = new Date(h.date);
             const dateTime = `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', {
@@ -265,14 +339,13 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
               qtyText,
               stockText,
               h.reason || '',
-              h.reference || '',
-              h.orderDetails ? h.orderDetails.orderNumber : ''
+              h.reference || ''
             ];
           });
 
     autoTable(doc, {
       startY: y + 10,
-      head: [[ 'Date & Heure', 'Type', 'Quantité', 'Stock', 'Motif', 'Réf.', 'Commande' ]],
+      head: [[ 'Date & Heure', 'Type', 'Quantité', 'Stock', 'Motif', 'Réf.' ]],
       body,
       margin: { left: lrMargin, right: lrMargin },
       tableWidth: usableWidth,
@@ -281,15 +354,14 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       bodyStyles: { lineColor: [226, 232, 240] },
       alternateRowStyles: { fillColor: [250, 250, 250] },
       theme: 'grid',
-      // largeurs totales <= largeur utile (paysage)
+      // largeurs adaptées au paysage
       columnStyles: {
-        0: { cellWidth: 110 }, // Date & Heure
+        0: { cellWidth: 130 }, // Date & Heure
         1: { cellWidth: 110 }, // Type
-        2: { cellWidth: 80 },  // Quantité
-        3: { cellWidth: 100 }, // Stock
-        4: { cellWidth: 200 }, // Motif
-        5: { cellWidth: 62 },  // Réf.
-        6: { cellWidth: 90 }   // Commande
+        2: { cellWidth: 90 },  // Quantité
+        3: { cellWidth: 120 }, // Stock
+        4: { cellWidth: 300 }, // Motif
+        5: { cellWidth: 80 }   // Réf.
       },
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 2) {
@@ -353,12 +425,12 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
         {/* Filtres */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Période</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Période rapide</label>
               <select
                 value={selectedPeriod}
-                onChange={e => setSelectedPeriod(e.target.value)}
+                onChange={e => setSelectedPeriod(e.target.value as any)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               >
                 <option value="all">Toute la période</option>
@@ -369,21 +441,42 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Type de mouvement
-              </label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type de mouvement</label>
               <select
                 value={filterType}
-                onChange={e => setFilterType(e.target.value)}
+                onChange={e => setFilterType(e.target.value as any)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               >
-                <option value="all">Tous les mouvements</option>
-                <option value="orders">Commandes uniquement</option>
-                <option value="adjustments">Rectifications uniquement</option>
+                <option value="all">Tous</option>
+                <option value="orders">Commandes</option>
+                <option value="adjustments">Rectifications</option>
                 <option value="initial">Stock initial</option>
               </select>
             </div>
 
+            {/* Du */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Du</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+
+            {/* Au */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Au</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+
+            {/* Export PDF */}
             <div className="flex items-end">
               <button
                 onClick={exportStockPDF}
@@ -396,7 +489,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Liste mouvements (UI inchangée) */}
+        {/* Liste mouvements (UI) */}
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {filteredHistory.length > 0 ? (
