@@ -229,7 +229,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     autoTable(doc, {
       ...baseTableOpts,
       startY: y + 16,
-      head: [['N°', 'Date', '(Nom produit-Qté)', 'Sous-total HT', 'TVA', 'Total TTC']],
+      head: [['N°', 'Date', 'Nom produit-Qté', 'Sous-total HT', 'TVA', 'Total TTC']],
       body: (supplierOrders.length
         ? supplierOrders.map<RowInput>((o) => ([
             textOrDash(o.number),
@@ -248,7 +248,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
       columnStyles: {
         0: { cellWidth: 30 , halign: 'center' },                  // N°
         1: { cellWidth: 30, halign: 'center' },// Date
-        2: { cellWidth: 30 , halign: 'center' },                  // Articles (wrap)
+        2: { cellWidth: 38 , halign: 'center' },                  // Articles (wrap)
         3: { cellWidth: 30, halign: 'center' }, // HT
         4: { cellWidth: 30, halign: 'center' }, // TVA
         5: { cellWidth: 30, halign: 'center' }, // TTC
