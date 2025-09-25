@@ -258,7 +258,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     y = (doc as any).lastAutoTable?.finalY ?? (m + headerH + 16);
 
     // 4) Paiements — rouge
-    drawCenteredTitle(doc, '💳 Paiements', y + 12, COLORS.red);
+    drawCenteredTitle(doc, 'Paiements', y + 12, COLORS.red);
     autoTable(doc, {
       ...baseTableOpts,
       startY: y + 16,
