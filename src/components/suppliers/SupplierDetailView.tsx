@@ -237,7 +237,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
             itemsToNameQty((o as any).items || []),
             `${fmtMAD((o as any).subtotal)} MAD`,
             `${fmtMAD((o as any).totalVat)} MAD`,
-            `${fmtMAD((o as any).totalTTC)} MAD`,
+            `${fmtMAD((o as any).totalTTC)} MAD`
           
         : [['-', '-', '-', '-', '-', '-', '-']]
       ),
