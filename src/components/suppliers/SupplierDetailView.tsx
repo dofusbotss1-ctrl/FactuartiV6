@@ -1,10 +1,14 @@
-// File: src/utils/exportSupplierReport.ts
+// ================================================
+// file: src/utils/exportSupplierReport.ts
+// deps: npm i jspdf jspdf-autotable
+// ================================================
 import jsPDF from 'jspdf';
 import autoTable, { UserOptions } from 'jspdf-autotable';
 
-export type UserLike = { company?: { name?: string; logo?: string; logoUrl?: string } };
+export type CompanyLike = { name?: string; logo?: string; logoUrl?: string };
+export type UserLike = { company?: CompanyLike } | null | undefined;
+
 export type SupplierLike = {
-  id?: string;
   name?: string;
   ice?: string;
   contactPerson?: string;
@@ -13,6 +17,7 @@ export type SupplierLike = {
   address?: string;
   paymentTerms?: number | string;
 };
+
 export type OrderLike = {
   number?: string | number;
   date: string | number | Date;
@@ -21,6 +26,7 @@ export type OrderLike = {
   totalTTC?: number;
   status?: string;
 };
+
 export type PaymentLike = {
   paymentDate: string | number | Date;
   amount?: number;
@@ -28,7 +34,20 @@ export type PaymentLike = {
   reference?: string;
   description?: string;
 };
-export type StatsLike = { totalPurchases: number; totalPayments: number; balance: number };
+
+export type StatsLike = {
+  totalPurchases: number;
+  totalPayments: number;
+  balance: number;
+};
+
+export type ExportArgs = {
+  user?: UserLike;
+  supplier: SupplierLike;
+  orders: OrderLike[];
+  payments: PaymentLike[];
+  stats: StatsLike;
+};
 
 const fmtMAD = (n: number | null | undefined) =>
   Number(n ?? 0).toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -47,80 +66,30 @@ async function loadImageAsDataURL(url: string): Promise<string | null> {
       fr.readAsDataURL(blob);
     });
   } catch {
-    // Pourquoi: CORS/erreur – on n'empêche pas l'export
-    return null;
+    return null; // Pourquoi: éviter blocage si CORS
   }
 }
 
-export async function exportSupplierReportPDF(args: {
-  user?: UserLike;
-  supplier: SupplierLike;
-  orders: OrderLike[];
-  payments: PaymentLike[];
-  stats: StatsLike;
-}): Promise<void> {
-  const { user, supplier, orders, payments, stats } = args;
-
+export async function exportSupplierReportPDF({
+  user,
+  supplier,
+  orders,
+  payments,
+  stats
+}: ExportArgs): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const totalPagesExp = '{total_pages_count_string}';
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const totalPagesExp = '{total_pages_count_string}';
-
-  const m = 12;            // marges
-  const headerH = 28;      // hauteur entête
-  const footerH = 10;      // hauteur pied
+  const m = 12; // marges
+  const headerH = 28;
+  const footerH = 10;
 
   const companyName = user?.company?.name || '';
   const logoUrl = user?.company?.logo || user?.company?.logoUrl || '';
-  const logoDataUrl = logoUrl ? await loadImageAsDataURL(logoUrl) : null; // Pourquoi: éviter async dans didDrawPage
+  const logoDataUrl = logoUrl ? await loadImageAsDataURL(logoUrl) : null;
 
-  // --- Header/Pied de page (appelé à chaque page)
-  const drawHeaderFooter = (pageNumber: number) => {
-    const yTop = m;
-
-    // Nom société (gauche)
-    if (companyName) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(15, 23, 42);
-      doc.text(companyName, m, yTop + 5);
-    }
-
-    // Logo (droite)
-    if (logoDataUrl) {
-      try {
-        const imgW = 38, imgH = 14;
-        const type = logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-        doc.addImage(logoDataUrl, type as any, pageW - m - imgW, yTop - 2, imgW, imgH, undefined, 'FAST');
-      } catch {
-        // Pourquoi: image invalide – ignorer sans casser l'export
-      }
-    }
-
-    // Titre centré
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(234, 88, 12);
-    doc.text('FICHE DE SUIVI FOURNISSEUR', pageW / 2, yTop + 4, { align: 'center' });
-
-    doc.setTextColor(31, 41, 55);
-    doc.setFontSize(11);
-    doc.text(`« ${supplier?.name || 'Fournisseur'} »`, pageW / 2, yTop + 10, { align: 'center' });
-
-    // Séparateur
-    doc.setDrawColor(234, 88, 12);
-    doc.setLineWidth(0.6);
-    doc.line(m, yTop + 14, pageW - m, yTop + 14);
-
-    // Pied
-    doc.setTextColor(107, 114, 128);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, m, pageH - 5);
-    doc.text(`Page ${pageNumber} / ${totalPagesExp}`, pageW - m, pageH - 5, { align: 'right' });
-  };
-
-  // --- Titres de section (gras & centrés)
+  // --- helpers UI ---
   const sectionTitle = (text: string, y: number) => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
@@ -132,15 +101,15 @@ export async function exportSupplierReportPDF(args: {
     return y + 7;
   };
 
-  // --- Bandeau KPI balance (vert si >0, sinon rouge)
   const kpiBanner = (y: number, valueText: string, label: string, positive: boolean) => {
-    const stroke = positive ? [22, 163, 74] : [220, 38, 38];
+    // Pourquoi: signal visuel balance
+    const border = positive ? [22, 163, 74] : [220, 38, 38];
     const fill = positive ? [220, 252, 231] : [254, 226, 226];
-    doc.setFillColor(fill[0], fill[1], fill[2]);
-    doc.setDrawColor(stroke[0], stroke[1], stroke[2]);
+    doc.setFillColor(...fill as [number, number, number]);
+    doc.setDrawColor(...border as [number, number, number]);
     doc.setLineWidth(0.8);
     doc.roundedRect(m, y, pageW - 2 * m, 18, 2, 2, 'FD');
-    doc.setTextColor(stroke[0], stroke[1], stroke[2]);
+    doc.setTextColor(...border as [number, number, number]);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.text(valueText, pageW / 2, y + 7.5, { align: 'center' });
@@ -150,6 +119,50 @@ export async function exportSupplierReportPDF(args: {
     return y + 22;
   };
 
+  // En-tête & pied
+  const drawHeaderFooter = (pageNumber: number) => {
+    const y = m;
+    // Nom société à gauche
+    if (companyName) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(15, 23, 42);
+      doc.text(companyName, m, y + 5);
+    }
+    // Logo à droite
+    if (logoDataUrl) {
+      try {
+        const type = logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        const imgW = 38, imgH = 14;
+        doc.addImage(logoDataUrl, type as any, pageW - m - imgW, y - 2, imgW, imgH, undefined, 'FAST');
+      } catch {
+        /* ignore */
+      }
+    }
+    // Titre centré
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(234, 88, 12);
+    doc.text('FICHE DE SUIVI FOURNISSEUR', pageW / 2, y + 4, { align: 'center' });
+
+    doc.setTextColor(31, 41, 55);
+    doc.setFontSize(11);
+    doc.text(`« ${supplier?.name || 'Fournisseur'} »`, pageW / 2, y + 10, { align: 'center' });
+
+    // ligne
+    doc.setDrawColor(234, 88, 12);
+    doc.setLineWidth(0.6);
+    doc.line(m, y + 14, pageW - m, y + 14);
+
+    // Footer
+    doc.setTextColor(107, 114, 128);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, m, pageH - 5);
+    doc.text(`Page ${pageNumber} / ${totalPagesExp}`, pageW - m, pageH - 5, { align: 'right' });
+  };
+
+  // Options communes tableaux
   const commonTable: Partial<UserOptions> = {
     theme: 'grid',
     styles: { fontSize: 9, cellPadding: 2.5, lineColor: [229, 231, 235], textColor: [17, 24, 39] },
@@ -157,10 +170,9 @@ export async function exportSupplierReportPDF(args: {
     didDrawPage: (d) => drawHeaderFooter(d.pageNumber)
   };
 
-  // -------- Page 1
+  // --- PAGE: Infos + Résumé + Commandes + Paiements ---
   let y = m + headerH + 6;
 
-  // Infos fournisseur
   y = sectionTitle('INFORMATIONS FOURNISSEUR', y);
   autoTable(doc, {
     ...commonTable,
@@ -180,7 +192,6 @@ export async function exportSupplierReportPDF(args: {
   });
   y = (doc as any).lastAutoTable?.finalY ?? y;
 
-  // Résumé + Balance
   y = sectionTitle('RÉSUMÉ FINANCIER', y + 8);
   y = kpiBanner(
     y + 3,
@@ -198,7 +209,6 @@ export async function exportSupplierReportPDF(args: {
   });
   y = (doc as any).lastAutoTable?.finalY ?? y;
 
-  // Commandes (bleu)
   y = sectionTitle('COMMANDES', y + 10);
   autoTable(doc, {
     ...commonTable,
@@ -228,7 +238,6 @@ export async function exportSupplierReportPDF(args: {
   });
   y = (doc as any).lastAutoTable?.finalY ?? y;
 
-  // Paiements (rouge)
   y = sectionTitle('PAIEMENTS', y + 10);
   autoTable(doc, {
     ...commonTable,
@@ -255,41 +264,74 @@ export async function exportSupplierReportPDF(args: {
     }
   });
 
-  // Pagination totale
-  try { (doc as any).putTotalPages(totalPagesExp); } catch {}
+  try { (doc as any).putTotalPages(totalPagesExp); } catch { /* ignore */ }
 
-  const filename = `Fournisseur_${String(supplier?.name || 'Inconnu').replace(/\s+/g, '_')}_${new Date()
+  const fileName = `Fournisseur_${String(supplier?.name || 'Inconnu').replace(/\s+/g, '_')}_${new Date()
     .toLocaleDateString('fr-FR')
     .replace(/\//g, '-')}.pdf`;
-  doc.save(filename);
+  doc.save(fileName);
 }
 
-// ----------------------------------------------------------------------
-// File: src/components/suppliers/ExportButton.tsx  (exemple d’intégration)
-// ----------------------------------------------------------------------
+// =====================================================
+// file: src/components/ExportSupplierPDFButton.tsx
+// Bouton prêt à l'emploi pour votre UI (React)
+// =====================================================
 import React from 'react';
 import { Download } from 'lucide-react';
 import {
   exportSupplierReportPDF,
-  UserLike, SupplierLike, OrderLike, PaymentLike, StatsLike
-} from '../../utils/exportSupplierReport';
+  ExportArgs,
+  SupplierLike,
+  OrderLike,
+  PaymentLike,
+  StatsLike,
+  UserLike
+} from '../utils/exportSupplierReport';
 
-export default function ExportButton(props: {
+type Props = {
   user?: UserLike;
   supplier: SupplierLike;
   orders: OrderLike[];
   payments: PaymentLike[];
   stats: StatsLike;
   className?: string;
-}) {
-  const { user, supplier, orders, payments, stats, className } = props;
+  label?: string;
+};
+
+export default function ExportSupplierPDFButton({
+  user,
+  supplier,
+  orders,
+  payments,
+  stats,
+  className,
+  label = 'Export PDF'
+}: Props) {
+  const onClick = async () => {
+    await exportSupplierReportPDF({ user, supplier, orders, payments, stats } as ExportArgs);
+  };
+
   return (
     <button
-      onClick={() => exportSupplierReportPDF({ user, supplier, orders, payments, stats })}
-      className={className ?? 'inline-flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-4 py-2 rounded-lg transition-all duration-200'}
+      onClick={onClick}
+      className={className || 'inline-flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-4 py-2 rounded-lg transition-all duration-200'}
+      title="Exporter en PDF"
     >
       <Download className="w-4 h-4" />
-      <span>Export PDF</span>
+      <span>{label}</span>
     </button>
   );
 }
+
+/*
+-- Intégration rapide dans votre composant existant (exemple):
+import ExportSupplierPDFButton from '../components/ExportSupplierPDFButton';
+
+<ExportSupplierPDFButton
+  user={auth.user} // ou votre source user
+  supplier={supplier}
+  orders={purchaseOrders.filter(o => o.supplierId === supplier.id)}
+  payments={supplierPayments.filter(p => p.supplierId === supplier.id)}
+  stats={getSupplierStats(supplier.id)}
+/>
+*/
