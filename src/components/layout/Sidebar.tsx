@@ -1,5 +1,6 @@
+// src/components/layout/Sidebar.tsx
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useLicense } from '../../contexts/LicenseContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -23,7 +24,8 @@ import {
   Shield,
   FolderKanban,
   Menu,
-  X
+  X,
+  LogOut, // <-- NEW
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -35,7 +37,8 @@ interface SidebarProps {
 export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
   const { t } = useLanguage();
   const { licenseType } = useLicense();
-  const { user } = useAuth();
+  const { user, logout } = useAuth(); // <-- include logout
+  const navigate = useNavigate();
 
   // Abonnement PRO
   const isProActive =
@@ -66,6 +69,15 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
     if (!canAccessProFeatures) {
       e.preventDefault();
       onUpgrade();
+    }
+  };
+
+  // Déconnexion (rediriger après logout pour éviter écran protégé)
+  const handleLogout = async () => {
+    try {
+      await logout?.();
+    } finally {
+      navigate('/login');
     }
   };
 
@@ -116,17 +128,16 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
 
     if (canAccess) {
       return (
-        <motion.div
-          whileHover={{ x: 2 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div whileHover={{ x: 2 }} transition={{ duration: 0.2 }}>
           <NavLink
             key={item.path}
             to={item.path}
             title={!open ? item.label : undefined}
             className={({ isActive }) =>
               `flex items-center ${open ? 'space-x-3' : 'justify-center'} ${basePadding} py-2.5 rounded-lg transition-all duration-200 group ${
-                isActive ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-lg' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                isActive
+                  ? 'bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-lg'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`
             }
           >
@@ -135,7 +146,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
               <div className="flex items-center space-x-2">
                 <span className="font-medium">{item.label}</span>
                 {item.isPro && (
-                  <motion.span 
+                  <motion.span
                     animate={{ scale: [1, 1.1, 1] }}
                     transition={{ duration: 2, repeat: Infinity }}
                     className="text-xs px-1.5 py-0.5 rounded-full font-bold bg-orange-400 text-orange-900"
@@ -164,7 +175,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
         {open && (
           <div className="flex items-center space-x-2">
             <span className="font-medium">{item.label}</span>
-            <motion.span 
+            <motion.span
               animate={{ rotate: [0, 5, -5, 0] }}
               transition={{ duration: 1, repeat: Infinity }}
               className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold"
@@ -180,12 +191,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
   return (
     <>
       {/* Overlay pour mobile */}
-      {open && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setOpen(false)}
-        />
-      )}
+      {open && <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setOpen(false)} />}
 
       {/* Sidebar */}
       <div
@@ -194,16 +200,20 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
         } border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen`}
       >
         {/* Header sticky */}
-        <div className={`sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between h-16 ${open ? 'px-6' : 'px-3'}`}>
+        <div
+          className={`sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between h-16 ${
+            open ? 'px-6' : 'px-3'
+          }`}
+        >
           <div className="flex items-center space-x-3">
-            <motion.div 
+            <motion.div
               whileHover={{ rotate: 360 }}
               transition={{ duration: 0.5 }}
               className="w-8 h-8 bg-gradient-to-br from-black-200 to-red-600  rounded-lg flex items-center justify-center shadow-lg"
             >
-              <img 
-                src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png" 
-                alt="Facturati Logo" 
+              <img
+                src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
+                alt="Facturati Logo"
                 className="w-8 h-8 object-contain"
               />
             </motion.div>
@@ -214,12 +224,12 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
               </div>
             )}
           </div>
-          
+
           {/* Bouton toggle - visible sur toutes les tailles */}
-          <motion.button 
+          <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            onClick={() => setOpen(!open)} 
+            onClick={() => setOpen(!open)}
             className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
             {open ? (
@@ -269,7 +279,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
 
                       {/* Badge : PRO orange (actif) / 🔒 rouge (expiré) / PRO rouge (Free) */}
                       {isProActive ? (
-                        <motion.span 
+                        <motion.span
                           animate={{ scale: [1, 1.05, 1] }}
                           transition={{ duration: 2, repeat: Infinity }}
                           className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full font-extrabold border bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-600"
@@ -277,7 +287,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
                           PRO
                         </motion.span>
                       ) : isProExpired ? (
-                        <motion.span 
+                        <motion.span
                           animate={{ rotate: [0, 5, -5, 0] }}
                           transition={{ duration: 1, repeat: Infinity }}
                           className="ml-2 inline-flex items-center text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold"
@@ -285,7 +295,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
                           🔒
                         </motion.span>
                       ) : (
-                        <motion.span 
+                        <motion.span
                           animate={{ rotate: [0, 5, -5, 0] }}
                           transition={{ duration: 1, repeat: Infinity }}
                           className="ml-2 inline-flex items-center text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold"
@@ -295,10 +305,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
                       )}
 
                       <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">{visibleGestion.length}</span>
-                      <motion.div
-                        animate={{ rotate: isGestionOpen ? 180 : 0 }}
-                        transition={{ duration: 0.3 }}
-                      >
+                      <motion.div animate={{ rotate: isGestionOpen ? 180 : 0 }} transition={{ duration: 0.3 }}>
                         <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                       </motion.div>
                     </>
@@ -316,7 +323,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
                       className="mt-1 space-y-1 overflow-hidden"
                     >
                       {visibleGestion.map((item, index) => (
-                        <motion.li 
+                        <motion.li
                           key={item.path}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -366,7 +373,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
           )}
 
           {isProActive ? (
-            <motion.div 
+            <motion.div
               whileHover={{ scale: 1.02 }}
               className={`bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg ${open ? 'p-3' : 'p-2'} text-white text-center shadow-lg`}
             >
@@ -378,7 +385,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
                   const timeDiff = expiry.getTime() - currentDate.getTime();
                   const daysRemaining = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
                   return (
-                    <motion.div 
+                    <motion.div
                       animate={daysRemaining <= 5 ? { scale: [1, 1.05, 1] } : {}}
                       transition={{ duration: 1, repeat: Infinity }}
                       className={`${open ? 'text-xs' : 'text-[8px]'} ${daysRemaining <= 5 ? 'font-bold' : 'opacity-90'}`}
@@ -401,7 +408,7 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
                 })()}
             </motion.div>
           ) : isActivationPending ? (
-            <motion.div 
+            <motion.div
               animate={{ opacity: [1, 0.7, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
               className={`bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg ${open ? 'p-3' : 'p-2'} text-white text-center shadow-lg`}
@@ -424,6 +431,19 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
               <div className={`${open ? 'text-xs' : 'text-[10px]'} font-medium`}>{open ? '👤 Compte Utilisateur' : '👤'}</div>
             </div>
           )}
+
+          {/* --- DÉCONNEXION (toujours sous le bloc ci-dessus) --- */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleLogout}
+            title={!open ? 'Déconnexion' : undefined}
+            className={`w-full flex items-center justify-center ${open ? 'space-x-2 p-3' : 'p-2'} rounded-lg text-white shadow-lg
+              bg-gradient-to-r from-rose-500 to-orange-600 hover:from-rose-600 hover:to-orange-700 transition-all duration-200`}
+          >
+            <LogOut className={open ? 'w-5 h-5' : 'w-6 h-6'} />
+            {open && <span className="text-xs font-semibold">Déconnexion</span>}
+          </motion.button>
         </div>
       </div>
     </>
