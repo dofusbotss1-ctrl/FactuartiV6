@@ -246,9 +246,9 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
       alternateRowStyles: { fillColor: COLORS.blueLight },
       // Largeurs adaptées à A4 (inner ~186mm)
       columnStyles: {
-        0: { cellWidth: 30 },                  // N°
+        0: { cellWidth: 30 , halign: 'center' },                  // N°
         1: { cellWidth: 30, halign: 'center' },// Date
-        2: { cellWidth: 30 },                  // Articles (wrap)
+        2: { cellWidth: 30 , halign: 'center' },                  // Articles (wrap)
         3: { cellWidth: 30, halign: 'center' }, // HT
         4: { cellWidth: 30, halign: 'center' }, // TVA
         5: { cellWidth: 30, halign: 'center' }, // TTC
