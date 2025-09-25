@@ -358,10 +358,10 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       columnStyles: {
         0: { cellWidth: 130 }, // Date & Heure
         1: { cellWidth: 110 }, // Type
-        2: { cellWidth: 90 },  // Quantité
+        2: { cellWidth: 100 },  // Quantité
         3: { cellWidth: 120 }, // Stock
         4: { cellWidth: 150 }, // Motif
-        5: { cellWidth: 80 }   // Réf.
+        5: { cellWidth: 100 }   // Réf.
       },
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 2) {
