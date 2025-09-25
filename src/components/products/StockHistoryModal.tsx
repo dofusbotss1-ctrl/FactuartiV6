@@ -183,13 +183,12 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
-  // ------- Export PDF (A4 paysage, colonnes qui tiennent) -------
+  // ------- Export PDF (Date+Heure fusionnées, colonne Utilisateur retirée) -------
   const exportStockPDF = () => {
-    // A4 paysage pour plus de largeur
     const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
-    const lrMargin = 40;                           // marge gauche/droite
-    const usableWidth = pageWidth - lrMargin * 2;  // largeur utile
+    const lrMargin = 40;
+    const usableWidth = pageWidth - lrMargin * 2;
     let y = 40;
 
     // En-tête
@@ -207,7 +206,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}`, pageWidth / 2, y, { align: 'center' });
     y += 26;
 
-    // Cartes résumé (s'adaptent à la largeur paysage)
+    // Cartes résumé
     const gap = 30;
     const cardW = (usableWidth - gap * 3) / 4;
     const cardH = 64;
@@ -247,32 +246,33 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     doc.text('Mouvements', lrMargin, y);
     y += 8;
 
-    // Données du tableau
+    // Corps du tableau — Date & Heure fusionnées, pas de "Utilisateur"
     const body: RowInput[] =
       filteredHistory.length === 0
-        ? [['—', '—', '—', '—', '—', '—', '—', '—', '—']]
+        ? [['—', '—', '—', '—', '—', '—', '—']]
         : filteredHistory.map(h => {
-            const date = new Date(h.date);
+            const d = new Date(h.date);
+            const dateTime = `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}`;
             const qty = Number(h.quantity ?? 0);
             const qtyText = `${qty > 0 ? '+' : ''}${qty.toFixed(3)} ${product.unit}`;
             const stockText = `${Number(h.previousStock ?? 0).toFixed(3)} → ${Number(h.newStock ?? 0).toFixed(3)}`;
             return [
-              date.toLocaleDateString('fr-FR'),
-              date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              dateTime,
               getMovementLabel(h.type),
               qtyText,
               stockText,
               h.reason || '',
               h.reference || '',
-              h.userName || '',
               h.orderDetails ? h.orderDetails.orderNumber : ''
             ];
           });
 
-    // Tableau qui respecte la largeur utile
     autoTable(doc, {
       startY: y + 10,
-      head: [[ 'Date', 'Heure', 'Type', 'Quantité', 'Stock', 'Motif', 'Réf.', 'Utilisateur', 'Commande' ]],
+      head: [[ 'Date & Heure', 'Type', 'Quantité', 'Stock', 'Motif', 'Réf.', 'Commande' ]],
       body,
       margin: { left: lrMargin, right: lrMargin },
       tableWidth: usableWidth,
@@ -281,20 +281,18 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       bodyStyles: { lineColor: [226, 232, 240] },
       alternateRowStyles: { fillColor: [250, 250, 250] },
       theme: 'grid',
-      // Largeurs TOTAL <= usableWidth (paysage)
+      // largeurs totales <= largeur utile (paysage)
       columnStyles: {
-        0: { cellWidth: 70 },   // Date
-        1: { cellWidth: 50 },   // Heure
-        2: { cellWidth: 110 },  // Type
-        3: { cellWidth: 85 },   // Quantité
-        4: { cellWidth: 110 },  // Stock
-        5: { cellWidth: 170 },  // Motif
-        6: { cellWidth: 65 },   // Réf
-        7: { cellWidth: 90 },   // Utilisateur
-        8: { cellWidth: 100 }   // Commande
+        0: { cellWidth: 110 }, // Date & Heure
+        1: { cellWidth: 110 }, // Type
+        2: { cellWidth: 80 },  // Quantité
+        3: { cellWidth: 100 }, // Stock
+        4: { cellWidth: 200 }, // Motif
+        5: { cellWidth: 62 },  // Réf.
+        6: { cellWidth: 90 }   // Commande
       },
       didParseCell: data => {
-        if (data.section === 'body' && data.column.index === 3) {
+        if (data.section === 'body' && data.column.index === 2) {
           const txt = String(data.cell.raw || '');
           if (txt.startsWith('+')) data.cell.styles.textColor = [22, 163, 74];
           else if (txt.startsWith('-')) data.cell.styles.textColor = [220, 38, 38];
@@ -302,7 +300,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       }
     });
 
-    // Téléchargement
     const filename = `historique_${product.name.replace(/\s+/g, '_')}.pdf`;
     doc.save(filename);
   };
@@ -399,7 +396,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Liste mouvements */}
+        {/* Liste mouvements (UI inchangée) */}
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {filteredHistory.length > 0 ? (
