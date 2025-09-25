@@ -10,8 +10,10 @@ import {
   CreditCard, Download, AlertTriangle, CheckCircle, Target,
   ArrowLeft, TrendingUp, TrendingDown, Plus, Edit, Trash2
 } from 'lucide-react';
-// @ts-ignore – la lib exporte un default UMD ; important côté client
-import html2pdf from 'html2pdf.js';
+
+// ✅ NO html2pdf/html2canvas
+import jsPDF from 'jspdf';
+import autoTable, { UserOptions } from 'jspdf-autotable';
 
 interface SupplierDetailViewProps {
   supplier: Supplier;
@@ -45,14 +47,10 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
 
   const getOrderStatusBadge = (status: string) => {
     switch (status) {
-      case 'paid':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Payé</span>;
-      case 'received':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Reçu</span>;
-      case 'sent':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Envoyé</span>;
-      default:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Brouillon</span>;
+      case 'paid': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Payé</span>;
+      case 'received': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Reçu</span>;
+      case 'sent': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Envoyé</span>;
+      default: return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Brouillon</span>;
     }
   };
 
@@ -70,239 +68,199 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
   const handleDeleteOrder = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cette commande ?')) deletePurchaseOrder(id);
   };
-
   const handleDeletePayment = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce paiement ?')) deleteSupplierPayment(id);
   };
 
-  // -------- FIX EXPORT PDF (robuste, pas de page blanche) --------
-  const waitForImages = (root: HTMLElement) => {
-    const imgs = Array.from(root.querySelectorAll('img'));
-    if (imgs.length === 0) return Promise.resolve();
-    return Promise.all(
-      imgs.map(img => new Promise<void>(res => {
-        if ((img as HTMLImageElement).complete) return res();
-        const done = () => res();
-        img.addEventListener('load', done, { once: true });
-        img.addEventListener('error', done, { once: true });
-      }))
-    ).then(() => undefined);
-  };
+  // ---------------- PROGRAMMATIC PDF (jsPDF + autotable) ----------------
+  const fmtMAD = (n: number | undefined | null) =>
+    Number(n ?? 0).toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const handleExportPDF = async () => {
-    const container = document.createElement('div');
+  const textOrDash = (v: any) => (v == null || v === '' ? '-' : String(v));
 
-    // Pourquoi: ne pas utiliser opacity:0 ni z-index:-1 (cause canvas blanc)
-    Object.assign(container.style, {
-      position: 'absolute',
-      left: '-10000px',
-      top: '0',
-      width: '210mm',
-      background: '#ffffff'
-    } as CSSStyleDeclaration);
-
-    container.innerHTML = generateSupplierReportHTML();
-    document.body.appendChild(container);
-
+  const fetchAsDataURL = async (url: string): Promise<string | null> => {
     try {
-      // Fonts + images avant capture (évite rendu vide)
-      if ((document as any).fonts?.ready) {
-        try { await (document as any).fonts.ready; } catch { /* ignore */ }
-      }
-      await waitForImages(container);
-
-      const options = {
-        margin: [10, 10, 10, 10] as [number, number, number, number],
-        filename: `Fournisseur_${(supplier.name || 'Inconnu').replace(/\s+/g, '_')}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,      // Pourquoi: autoriser logo externe
-          allowTaint: false,
-          logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth: 1240   // Un viewport large stabilise la mise en page
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      await (html2pdf() as any).set(options).from(container).save();
-    } catch (error) {
-      console.error('Erreur lors de la génération du PDF:', error);
-      alert('Erreur lors de la génération du PDF');
-    } finally {
-      if (document.body.contains(container)) document.body.removeChild(container);
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.onerror = () => reject(fr.error);
+        fr.readAsDataURL(blob);
+      });
+    } catch {
+      return null; // Pourquoi: pas de CORS -> ignorer logo
     }
   };
 
-  const generateSupplierReportHTML = () => {
-    // Utilise les champs si présents; sinon fallback sûrs (logo transparent)
+  const exportSupplierReportPDF = async () => {
     const companyName =
       (supplier as any).companyName ||
       (supplier as any).societe ||
       'Nom de la société';
-    const logoUrl =
-      (supplier as any).logoUrl ||
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
 
-    const fmt = (n: number) => (n ?? 0).toLocaleString('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const supplierName = supplier.name || 'Fournisseur';
+    const logoUrl: string | undefined = (supplier as any).logoUrl;
+    const logoDataUrl = logoUrl ? await fetchAsDataURL(logoUrl) : null;
 
-    // IMPORTANT: pas de classes Tailwind ici, uniquement du style inline/CSS embarqué
-    return `
-      <div id="supplier-report-root">
-        <style>
-          * { box-sizing: border-box; }
-          @page { size: A4; margin: 10mm; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .a4 { width: 190mm; margin: 0 auto; font-family: Arial, sans-serif; color: #111827; font-size: 12px; }
-          .row { display: flex; gap: 12px; }
-          .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-          .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-          .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
-          .muted { color: #6b7280; }
-          .title { font-weight: 700; }
-          .h1 { font-size: 22px; }
-          .h2 { font-size: 16px; }
-          .center { text-align: center; }
-          .mb8 { margin-bottom: 8px; }
-          .mb12 { margin-bottom: 12px; }
-          .mb16 { margin-bottom: 16px; }
-          .mb24 { margin-bottom: 24px; }
-          .badge { display:inline-block; font-size:10px; padding:2px 6px; border-radius:999px; border:1px solid #e5e7eb; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { border: 1px solid #e5e7eb; padding: 8px; vertical-align: top; }
-          thead tr { background: #f3f4f6; }
-          .right { text-align: right; }
-          .center { text-align: center; }
-          .avoid-break { page-break-inside: avoid; }
-          .page-break { page-break-before: always; }
-          .kpi { text-align:center; border:1px solid #e5e7eb; border-radius: 8px; padding:12px; }
-          .kpi .v { font-size:18px; font-weight:700; }
-          .kpi .l { font-size:11px; color:#374151; }
-          .header { border-bottom: 2px solid #EA580C; padding-bottom: 12px; }
-          .logo { width: 64px; height: 64px; object-fit: contain; }
-        </style>
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const totalPagesExp = '{total_pages_count_string}';
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const m = 12; // marges
+    const headerH = 26;
+    const footerH = 12;
 
-        <div class="a4">
-          <!-- Entête -->
-          <div class="header row mb16 avoid-break" style="align-items:center; justify-content:space-between;">
-            <div class="row" style="align-items:center; gap:12px;">
-              <img class="logo" src="${logoUrl}" alt="logo" crossOrigin="anonymous"
-                   onerror="this.style.display='none'"/>
-              <div>
-                <div class="h2 title">${companyName}</div>
-                <div class="muted">Généré le ${new Date().toLocaleDateString('fr-FR')}</div>
-              </div>
-            </div>
-            <div class="right">
-              <div class="h1 title" style="color:#EA580C;">FICHE DE SUIVI FOURNISSEUR</div>
-              <div class="h2 title center">« ${escapeHtml(supplier.name)} »</div>
-            </div>
-          </div>
+    // En-tête/pied sur toutes les pages
+    const drawHeaderFooter = (pageNumber: number) => {
+      // Header
+      let y = m;
+      if (logoDataUrl) {
+        try {
+          const imgType = logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+          doc.addImage(logoDataUrl, imgType as any, m, y - 2, 18, 18);
+        } catch { /* Pourquoi: si image invalide, ne pas bloquer */ }
+      }
+      doc.setTextColor(17, 24, 39);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(companyName, pageWidth - m, y + 4, { align: 'right' });
 
-          <!-- Informations fournisseur -->
-          <div class="grid-2 mb16 avoid-break">
-            <div class="card">
-              <div class="title mb8">Informations Fournisseur</div>
-              <div><b>Nom:</b> ${escapeHtml(supplier.name || '-')}</div>
-              <div><b>ICE:</b> ${escapeHtml((supplier as any).ice || '-')}</div>
-              <div><b>Contact:</b> ${escapeHtml((supplier as any).contactPerson || '-')}</div>
-              <div><b>Tél:</b> ${escapeHtml((supplier as any).phone || '-')}</div>
-              <div><b>Email:</b> ${escapeHtml((supplier as any).email || '-')}</div>
-              <div><b>Adresse:</b> ${escapeHtml((supplier as any).address || '-')}</div>
-              <div><b>Délai:</b> ${Number((supplier as any).paymentTerms || 0)} jours</div>
-            </div>
-            <div class="grid-3">
-              <div class="kpi">
-                <div class="v">${fmt(stats.totalPurchases)} MAD</div>
-                <div class="l">Total Commandes</div>
-              </div>
-              <div class="kpi">
-                <div class="v">${fmt(stats.totalPayments)} MAD</div>
-                <div class="l">Total Paiements</div>
-              </div>
-              <div class="kpi">
-                <div class="v">${fmt(stats.balance)} MAD</div>
-                <div class="l">${stats.balance > 0 ? 'À payer' : (stats.balance < 0 ? 'Crédit' : 'Soldé')}</div>
-              </div>
-            </div>
-          </div>
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - m, y + 9, { align: 'right' });
 
-          <!-- Commandes -->
-          <div class="mb16 avoid-break">
-            <div class="title mb8">📦 Commandes</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>N°</th>
-                  <th class="center">Date</th>
-                  <th class="right">Sous-total HT</th>
-                  <th class="right">TVA</th>
-                  <th class="right">Total TTC</th>
-                  <th class="center">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${supplierOrders.length === 0
-                  ? `<tr><td colspan="6" class="center muted">Aucune commande</td></tr>`
-                  : supplierOrders.map(order => `
-                    <tr>
-                      <td>${escapeHtml(order.number)}</td>
-                      <td class="center">${new Date(order.date).toLocaleDateString('fr-FR')}</td>
-                      <td class="right">${fmt(order.subtotal)} MAD</td>
-                      <td class="right">${fmt(order.totalVat)} MAD</td>
-                      <td class="right"><b>${fmt(order.totalTTC)} MAD</b></td>
-                      <td class="center"><span class="badge">${escapeHtml(order.status)}</span></td>
-                    </tr>
-                  `).join('')}
-              </tbody>
-            </table>
-          </div>
+      doc.setFontSize(14);
+      doc.setTextColor(234, 88, 12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('FICHE DE SUIVI FOURNISSEUR', pageWidth / 2, y + 4, { align: 'center' });
 
-          <!-- Saut de page si beaucoup de paiements -->
-          <div class="${supplierPaymentsData.length > 12 ? 'page-break' : 'mb16'}"></div>
+      doc.setTextColor(17, 24, 39);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`« ${supplierName} »`, pageWidth / 2, y + 10, { align: 'center' });
 
-          <!-- Paiements -->
-          <div class="mb16 avoid-break">
-            <div class="title mb8">💳 Paiements</div>
-            <table>
-              <thead>
-                <tr>
-                  <th class="center">Date</th>
-                  <th class="right">Montant</th>
-                  <th class="center">Mode</th>
-                  <th class="center">Référence</th>
-                  <th>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${supplierPaymentsData.length === 0
-                  ? `<tr><td colspan="5" class="center muted">Aucun paiement</td></tr>`
-                  : supplierPaymentsData.map(p => `
-                    <tr>
-                      <td class="center">${new Date(p.paymentDate).toLocaleDateString('fr-FR')}</td>
-                      <td class="right"><b>${fmt(p.amount)} MAD</b></td>
-                      <td class="center">${escapeHtml(p.paymentMethod)}</td>
-                      <td class="center">${escapeHtml(p.reference || '-')}</td>
-                      <td>${escapeHtml(p.description || '-')}</td>
-                    </tr>
-                  `).join('')}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    `;
+      // ligne
+      doc.setDrawColor(234, 88, 12);
+      doc.setLineWidth(0.6);
+      doc.line(m, y + 14, pageWidth - m, y + 14);
+
+      // Footer
+      doc.setTextColor(107, 114, 128);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      const pageLabel = `Page ${pageNumber} / ${totalPagesExp}`;
+      doc.text(pageLabel, pageWidth - m, pageHeight - 6, { align: 'right' });
+      doc.text(window.location.host || '—', m, pageHeight - 6);
+    };
+
+    const commonTableOpts: Partial<UserOptions> = {
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 2, lineColor: [229, 231, 235], textColor: [17, 24, 39] },
+      headStyles: { fillColor: [243, 244, 246], textColor: [31, 41, 55], fontStyle: 'bold' },
+      margin: { top: m + headerH, bottom: m + footerH, left: m, right: m },
+      didDrawPage: (data) => {
+        drawHeaderFooter(data.pageNumber);
+      }
+    };
+
+    // 1) Infos fournisseur (table 2 colonnes)
+    autoTable(doc, {
+      ...commonTableOpts,
+      startY: m + headerH + 4,
+      head: [['Champ', 'Valeur']],
+      body: [
+        ['Nom', textOrDash(supplier.name)],
+        ['ICE', textOrDash((supplier as any).ice)],
+        ['Contact', textOrDash((supplier as any).contactPerson)],
+        ['Téléphone', textOrDash((supplier as any).phone)],
+        ['Email', textOrDash((supplier as any).email)],
+        ['Adresse', textOrDash((supplier as any).address)],
+        ['Délai de paiement (jours)', String((supplier as any).paymentTerms ?? '-')],
+      ],
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 }, 1: { cellWidth: 'auto' } }
+    });
+
+    let y = (doc as any).lastAutoTable?.finalY ?? (m + headerH + 8);
+
+    // 2) Résumé financier (3 colonnes)
+    autoTable(doc, {
+      ...commonTableOpts,
+      startY: y + 4,
+      head: [['Total Commandes', 'Total Paiements', 'Balance']],
+      body: [[
+        `${fmtMAD(stats.totalPurchases)} MAD`,
+        `${fmtMAD(stats.totalPayments)} MAD`,
+        `${fmtMAD(stats.balance)} MAD ${stats.balance > 0 ? '(À payer)' : stats.balance < 0 ? '(Crédit)' : '(Soldé)'}`
+      ]],
+      columnStyles: { 0: { halign: 'center' }, 1: { halign: 'center' }, 2: { halign: 'center' } }
+    });
+
+    y = (doc as any).lastAutoTable?.finalY ?? (m + headerH + 8);
+
+    // 3) Commandes
+    const ordersHead = [['N°', 'Date', 'Sous-total HT', 'TVA', 'Total TTC', 'Statut']];
+    const ordersBody = supplierOrders.length
+      ? supplierOrders.map(o => ([
+          String(o.number ?? '-'),
+          new Date(o.date).toLocaleDateString('fr-FR'),
+          `${fmtMAD(o.subtotal)} MAD`,
+          `${fmtMAD(o.totalVat)} MAD`,
+          `${fmtMAD(o.totalTTC)} MAD`,
+          String(o.status ?? '-')
+        ]))
+      : [['-', '-', '-', '-', '-', '-']];
+
+    autoTable(doc, {
+      ...commonTableOpts,
+      startY: y + 6,
+      head: ordersHead,
+      body: ordersBody,
+      columnStyles: {
+        0: { cellWidth: 28 },
+        1: { cellWidth: 24, halign: 'center' },
+        2: { cellWidth: 32, halign: 'right' },
+        3: { cellWidth: 26, halign: 'right' },
+        4: { cellWidth: 32, halign: 'right' },
+        5: { cellWidth: 'auto', halign: 'center' }
+      }
+    });
+
+    y = (doc as any).lastAutoTable?.finalY ?? (m + headerH + 8);
+
+    // 4) Paiements
+    const paysHead = [['Date', 'Montant', 'Mode', 'Référence', 'Description']];
+    const paysBody = supplierPaymentsData.length
+      ? supplierPaymentsData.map(p => ([
+          new Date(p.paymentDate).toLocaleDateString('fr-FR'),
+          `${fmtMAD(p.amount)} MAD`,
+          textOrDash(p.paymentMethod),
+          textOrDash(p.reference),
+          textOrDash(p.description)
+        ]))
+      : [['-', '-', '-', '-', '-']];
+
+    autoTable(doc, {
+      ...commonTableOpts,
+      startY: y + 6,
+      head: paysHead,
+      body: paysBody,
+      columnStyles: {
+        0: { cellWidth: 24, halign: 'center' },
+        1: { cellWidth: 30, halign: 'right' },
+        2: { cellWidth: 28, halign: 'center' },
+        3: { cellWidth: 36, halign: 'center' },
+        4: { cellWidth: 'auto' }
+      }
+    });
+
+    // Nombre total de pages
+    try { (doc as any).putTotalPages(totalPagesExp); } catch { /* ok */ }
+
+    const fileName = `Fournisseur_${supplierName.replace(/\s+/g, '_')}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
+    doc.save(fileName);
   };
-
-  // Petites utilitaires sûres pour du HTML inline
-  const escapeHtml = (v: any) =>
-    String(v ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
 
   return (
     <div className="space-y-6">
@@ -321,7 +279,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
           </div>
         </div>
         <button
-          onClick={handleExportPDF}
+          onClick={exportSupplierReportPDF}
           className="inline-flex items-center space-x-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-4 py-2 rounded-lg transition-all duration-200"
         >
           <Download className="w-4 h-4" />
@@ -429,7 +387,7 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => setActiveTab(tab.id as any)}
                   className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === tab.id
                       ? 'border-orange-500 text-orange-600'
@@ -599,16 +557,10 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
               >
                 {stats.balance > 0 ? <AlertTriangle className="w-12 h-12 text-red-600" /> : stats.balance < 0 ? <CheckCircle className="w-12 h-12 text-green-600" /> : <Target className="w-12 h-12 text-gray-600" />}
                 <div>
-                  <div
-                    className={`text-4xl font-bold ${stats.balance > 0 ? 'text-red-600' : stats.balance < 0 ? 'text-green-600' : 'text-gray-600'}`}
-                  >
+                  <div className={`text-4xl font-bold ${stats.balance > 0 ? 'text-red-600' : stats.balance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
                     {stats.balance.toLocaleString()} MAD
                   </div>
-                  <div
-                    className={`text-lg ${
-                      stats.balance > 0 ? 'text-red-700 dark:text-red-300' : stats.balance < 0 ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
+                  <div className={`text-lg ${stats.balance > 0 ? 'text-red-700 dark:text-red-300' : stats.balance < 0 ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300'}`}>
                     {stats.balance > 0 ? 'Montant à payer' : stats.balance < 0 ? 'Crédit disponible' : 'Compte soldé'}
                   </div>
                 </div>
@@ -673,33 +625,17 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <DollarSign
-                    className={`w-6 h-6 ${stats.balance > 0 ? 'text-red-600' : stats.balance < 0 ? 'text-green-600' : 'text-gray-600'}`}
-                  />
+                  <DollarSign className={`w-6 h-6 ${stats.balance > 0 ? 'text-red-600' : stats.balance < 0 ? 'text-green-600' : 'text-gray-600'}`} />
                   <div>
-                    <p
-                      className={`font-bold ${
-                        stats.balance > 0 ? 'text-red-900 dark:text-red-100' : stats.balance < 0 ? 'text-green-900 dark:text-green-100' : 'text-gray-900 dark:text-gray-100'
-                      }`}
-                    >
-                      Balance finale
-                    </p>
-                    <p
-                      className={`text-sm ${
-                        stats.balance > 0 ? 'text-red-700 dark:text-red-300' : stats.balance < 0 ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      Commandes - Paiements
-                    </p>
+                    <p className={`font-bold ${stats.balance > 0 ? 'text-red-900 dark:text-red-100' : stats.balance < 0 ? 'text-green-900 dark:text-green-100' : 'text-gray-900 dark:text-gray-100'}`}>Balance finale</p>
+                    <p className={`text-sm ${stats.balance > 0 ? 'text-red-700 dark:text-red-300' : stats.balance < 0 ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300'}`}>Commandes - Paiements</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className={`text-2xl font-bold ${stats.balance > 0 ? 'text-red-600' : stats.balance < 0 ? 'text-green-600' : 'text-gray-600'}`}>
                     {stats.balance > 0 ? '+' : ''}{stats.balance.toLocaleString()}
                   </p>
-                  <p className={`${stats.balance > 0 ? 'text-red-700 dark:text-red-300' : stats.balance < 0 ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300'} text-sm`}>
-                    MAD
-                  </p>
+                  <p className={`${stats.balance > 0 ? 'text-red-700 dark:text-red-300' : stats.balance < 0 ? 'text-green-700 dark:text-green-300' : 'text-gray-700 dark:text-gray-300'} text-sm`}>MAD</p>
                 </div>
               </div>
             </div>
@@ -726,3 +662,10 @@ export default function SupplierDetailView({ supplier, onBack }: SupplierDetailV
     </div>
   );
 }
+
+/**
+ * Dépendances à installer:
+ *   npm i jspdf jspdf-autotable
+ *   # ou
+ *   yarn add jspdf jspdf-autotable
+ */
