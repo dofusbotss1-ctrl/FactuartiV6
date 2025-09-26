@@ -39,13 +39,38 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   // --- utils
   const normQty = (type: string, q: number) => {
-    // Pourquoi: homogénéiser les signes pour fiabiliser le calcul du stock
     if (type === 'order_out') return -Math.abs(q);
     if (type === 'order_cancel_return') return Math.abs(q);
     return q;
   };
 
-  /** Historique brut (initial + rectifs + commandes SM + commandes synthétiques) */
+  // Déduplication des mouvements de commandes (évite les doublons à l’annulation)
+  const dedupeOrderMovements = (movs: any[]) => {
+    const map = new Map<string, any>();
+    for (const m of movs) {
+      const qty = Math.abs(Number(m.quantity || 0));
+      const key = [
+        m.type,
+        String(m.orderId || ''),
+        String(m.productId || ''),
+        String(m.reference || ''),
+        qty.toFixed(3),
+      ].join('|');
+
+      const current = map.get(key);
+      if (!current) {
+        map.set(key, m);
+      } else {
+        // on garde le plus récent
+        const d1 = new Date(current.adjustmentDateTime || current.date).getTime();
+        const d2 = new Date(m.adjustmentDateTime || m.date).getTime();
+        if (d2 >= d1) map.set(key, m);
+      }
+    }
+    return Array.from(map.values());
+  };
+
+  /** Historique brut (initial + rectifs + commandes SM dédupliquées + commandes synthétiques) */
   const buildBaseHistory = () => {
     const history: any[] = [];
 
@@ -65,6 +90,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       });
     }
 
+    // Rectifications
     stockMovements
       .filter(m => m.productId === product.id && m.type === 'adjustment')
       .forEach(m => {
@@ -83,9 +109,12 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         });
       });
 
-    const orderMovementsFromSM = stockMovements.filter(
+    // Mouvements commandes depuis stockMovements (dédupliqués)
+    const orderMovementsFromSMRaw = stockMovements.filter(
       m => m.productId === product.id && (m.type === 'order_out' || m.type === 'order_cancel_return')
     );
+    const orderMovementsFromSM = dedupeOrderMovements(orderMovementsFromSMRaw);
+
     orderMovementsFromSM.forEach(m => {
       history.push({
         id: m.id,
@@ -102,6 +131,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       });
     });
 
+    // Ordes livrés présents dans orders mais pas dans stockMovements → synthèse
     const smOrderIds = new Set(orderMovementsFromSM.map(m => String(m.orderId || '')));
     orders.forEach(order => {
       if (order.status !== 'livre') return;
@@ -172,7 +202,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const history = enrichWithRunningStock(buildBaseHistory());
 
-  // ------- Résumé (source de vérité = dernier newStock) -------
+  // ------- Résumé -------
   const summary = {
     initialStock: product.initialStock || 0,
     totalOrdersSold: orders.reduce((sum, order) => {
@@ -283,7 +313,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       }
     });
 
-  // ------- Export PDF (colonne Motif -> Client) -------
+  // ------- Export PDF (Motif -> Client) -------
   const exportStockPDF = async () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -335,11 +365,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     const cards = [
       { label: 'Stock initial', value: summary.initialStock.toFixed(3), color: [37, 99, 235] as const },
       { label: 'Total commandé', value: summary.totalOrdersSold.toFixed(3), color: [220, 38, 38] as const },
-      {
-        label: 'Rectifications',
-        value: `${summary.totalAdjustments > 0 ? '+' : ''}${summary.totalAdjustments.toFixed(3)}`,
-        color: [124, 58, 237] as const
-      },
+      { label: 'Rectifications', value: `${summary.totalAdjustments > 0 ? '+' : ''}${summary.totalAdjustments.toFixed(3)}`, color: [124, 58, 237] as const },
       { label: 'Stock actuel', value: summary.currentStock.toFixed(3), color: [22, 163, 74] as const }
     ];
 
@@ -380,33 +406,21 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             const qtyText = `${qty > 0 ? '+' : ''}${qty.toFixed(3)} ${product.unit}`;
             const stockText = `${Number(h.previousStock ?? 0).toFixed(3)} --> ${Number(h.newStock ?? 0).toFixed(3)}`;
 
-            // Client: depuis orderDetails sinon chercher l’ordre, sinon —
             let clientText = '—';
             if (h.orderDetails?.clientName) {
               clientText = String(h.orderDetails.clientName);
             } else if (h.orderId) {
               const od = getOrderById(h.orderId);
               if (od) {
-                clientText =
-                  od.clientType === 'personne_physique'
-                    ? (od.clientName || '—')
-                    : (od.client?.name || '—');
+                clientText = od.clientType === 'personne_physique' ? (od.clientName || '—') : (od.client?.name || '—');
               }
             }
 
-            return [
-              dateTime,
-              getMovementLabel(h.type),
-              qtyText,
-              stockText,
-              clientText,
-              h.reference || ''
-            ];
+            return [dateTime, getMovementLabel(h.type), qtyText, stockText, clientText, h.reference || ''];
           });
 
     autoTable(doc, {
       startY: y + 10,
-      // Motif -> Client
       head: [[ 'Date & Heure', 'Type', 'Quantité', 'Stock', 'Client', 'Réf.' ]],
       body,
       margin: { left: lrMargin, right: lrMargin },
@@ -417,12 +431,12 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       alternateRowStyles: { fillColor: [250, 250, 250] },
       theme: 'grid',
       columnStyles: {
-        0: { cellWidth: 130 }, // Date & Heure
-        1: { cellWidth: 110 }, // Type
-        2: { cellWidth: 100 }, // Quantité
-        3: { cellWidth: 120 }, // Stock
-        4: { cellWidth: 150 }, // Client
-        5: { cellWidth: 100 }  // Réf.
+        0: { cellWidth: 130 },
+        1: { cellWidth: 110 },
+        2: { cellWidth: 100 },
+        3: { cellWidth: 120 },
+        4: { cellWidth: 150 },
+        5: { cellWidth: 100 }
       },
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 2) {
@@ -439,9 +453,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Historique du Stock" size="xl">
-      {/* ... UI identique à la version précédente (aucun changement requis pour la demande) ... */}
-      {/* Pour tenir court ici, le reste du composant (listes, modales, etc.) est inchangé. */}
-      {/* >>> IMPORTANT: conserve le même JSX d'affichage que ta dernière version validée <<< */}
       <div className="space-y-6">
         {/* Header + cartes résumé */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-700">
@@ -547,7 +558,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Liste mouvements (inchangé) */}
+        {/* Liste mouvements */}
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {filteredHistory.length > 0 ? (
@@ -641,7 +652,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Modal commande liée… (inchangée) */}
+        {/* Modal commande liée */}
         {viewingOrder && (
           <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -661,7 +672,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                   }
                   return (
                     <div className="space-y-4">
-                      {/* contenu inchangé */}
+                      {/* détails de commande */}
                     </div>
                   );
                 })()}
