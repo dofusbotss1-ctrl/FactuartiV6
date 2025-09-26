@@ -289,7 +289,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     const pageWidth = doc.internal.pageSize.getWidth();
     const lrMargin = 40;
     const usableWidth = pageWidth - lrMargin * 2;
-    let y = 50;
+    let y = 80;
 
     const companyName = user?.company?.name || '';
     const logoUrl = (user?.company as any)?.logo || (user?.company as any)?.logoUrl || '';
