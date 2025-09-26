@@ -378,7 +378,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             })}`;
             const qty = Number(h.quantity ?? 0);
             const qtyText = `${qty > 0 ? '+' : ''}${qty.toFixed(3)} ${product.unit}`;
-            const stockText = `${Number(h.previousStock ?? 0).toFixed(3)} → ${Number(h.newStock ?? 0).toFixed(3)}`;
+            const stockText = `${Number(h.previousStock ?? 0).toFixed(3)} --> ${Number(h.newStock ?? 0).toFixed(3)}`;
 
             // Client: depuis orderDetails sinon chercher l’ordre, sinon —
             let clientText = '—';
