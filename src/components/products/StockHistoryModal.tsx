@@ -34,41 +34,24 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'week' | 'month' | 'quarter'>('all');
   const [filterType, setFilterType] = useState<'all' | 'orders' | 'adjustments' | 'initial'>('all');
 
-  // ✅ filtres dates
-  const [startDate, setStartDate] = useState<string>(''); // yyyy-mm-dd
-  const [endDate, setEndDate] = useState<string>('');     // yyyy-mm-dd
+  // dates
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
-  // --- helpers ---
-  const getSignedDelta = (type: string, qtyRaw: any): number => {
-    const q = Number(qtyRaw ?? 0);
-    if (!Number.isFinite(q) || q === 0) return 0;
-    switch (type) {
-      case 'order_out':
-        return q < 0 ? q : -Math.abs(q);
-      case 'order_cancel_return':
-        return q < 0 ? Math.abs(q) : Math.abs(q);
-      case 'adjustment':
-        return q; // peut être +/-
-      case 'initial':
-      default:
-        return q;
-    }
-  };
-
-  // ------- Historique complet du produit (avec previous/new calculés si manquants) -------
+  // Build full history for the product
   const generateProductHistory = () => {
-    const base: any[] = [];
+    const history: any[] = [];
 
     if (product.initialStock > 0) {
-      base.push({
+      history.push({
         id: `initial-${product.id}`,
         type: 'initial',
         date: product.createdAt,
-        quantity: Number(product.initialStock),
+        quantity: product.initialStock,
         previousStock: 0,
-        newStock: Number(product.initialStock),
+        newStock: product.initialStock,
         reason: 'Stock initial',
         userName: 'Système',
         reference: '',
@@ -79,13 +62,13 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
     const adjustments = stockMovements.filter(m => m.productId === product.id && m.type === 'adjustment');
     adjustments.forEach(m => {
-      base.push({
+      history.push({
         id: m.id,
         type: m.type,
         date: m.adjustmentDateTime || m.date,
-        quantity: Number(m.quantity ?? 0),
-        previousStock: m.previousStock ?? null,
-        newStock: m.newStock ?? null,
+        quantity: m.quantity,
+        previousStock: m.previousStock,
+        newStock: m.newStock,
         reason: m.reason || 'Rectification',
         userName: m.userName,
         reference: m.reference || '',
@@ -98,13 +81,15 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       m => m.productId === product.id && (m.type === 'order_out' || m.type === 'order_cancel_return')
     );
     orderMoves.forEach(m => {
-      base.push({
+      const isCancel = m.type === 'order_cancel_return';
+      history.push({
         id: m.id,
         type: m.type,
         date: m.adjustmentDateTime || m.date,
-        quantity: Number(m.quantity ?? 0),
-        previousStock: m.previousStock ?? null,
-        newStock: m.newStock ?? null,
+        quantity: m.quantity,
+        // important: cancelled order must display 0 → 0 in “Stock après mouvement”
+        previousStock: isCancel ? 0 : m.previousStock,
+        newStock: isCancel ? 0 : m.newStock,
         reason: m.type === 'order_out' ? 'Commande livrée' : 'Commande annulée',
         userName: m.userName,
         reference: m.reference || '',
@@ -113,69 +98,51 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       });
     });
 
-    // Rejouer les mouvements dans l'ordre pour remplir previous/new manquants
-    const asc = base.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    let runningStock = Number(product.initialStock || 0); // pourquoi: source de vérité si pas d'entry "initial"
-
-    for (let i = 0; i < asc.length; i++) {
-      const m = asc[i];
-
-      // si l'entrée "initial" existe, on base runningStock dessus
-      if (i === 0 && m.type === 'initial') {
-        const prev = Number(m.previousStock ?? 0);
-        const next = Number(m.newStock ?? m.quantity ?? 0);
-        m.previousStock = prev;
-        m.newStock = next;
-        runningStock = next;
-        continue;
-      }
-
-      const hasPrev = m.previousStock !== undefined && m.previousStock !== null && !Number.isNaN(Number(m.previousStock));
-      const hasNext = m.newStock !== undefined && m.newStock !== null && !Number.isNaN(Number(m.newStock));
-
-      const prev = hasPrev ? Number(m.previousStock) : runningStock;
-      const next = hasNext ? Number(m.newStock) : prev + getSignedDelta(m.type, m.quantity);
-
-      m.previousStock = prev;
-      m.newStock = next;
-      runningStock = next;
-    }
-
-    // Desc pour affichage
-    return asc.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   const history = generateProductHistory();
 
-  // ------- Résumé -------
+  // Résumé
   const calculateCurrentStock = () => {
-    // pourquoi: inclure aussi les retours d'annulation, pas seulement les commandes livrées
-    const deltas = stockMovements
-      .filter(m => m.productId === product.id)
-      .reduce((sum, m) => sum + getSignedDelta(m.type, m.quantity), 0);
-    return Number(product.initialStock || 0) + deltas;
+    const initial = product.initialStock || 0;
+    const adjustments = stockMovements
+      .filter(m => m.productId === product.id && m.type === 'adjustment')
+      .reduce((s, m) => s + (m.quantity || 0), 0);
+    const delivered = orders.reduce((sum, order) => {
+      if (order.status === 'livre') {
+        return (
+          sum +
+          order.items
+            .filter(i => i.productName === product.name)
+            .reduce((x, i) => x + (i.quantity || 0), 0)
+        );
+      }
+      return sum;
+    }, 0);
+    return initial + adjustments - delivered;
   };
 
   const summary = {
-    initialStock: Number(product.initialStock || 0),
+    initialStock: product.initialStock || 0,
     totalOrdersSold: orders.reduce((sum, order) => {
       if (order.status === 'livre') {
         return (
           sum +
           order.items
             .filter(i => i.productName === product.name)
-            .reduce((x, i) => x + Number(i.quantity || 0), 0)
+            .reduce((x, i) => x + (i.quantity || 0), 0)
         );
       }
       return sum;
     }, 0),
     totalAdjustments: stockMovements
       .filter(m => m.productId === product.id && m.type === 'adjustment')
-      .reduce((s, m) => s + Number(m.quantity || 0), 0),
+      .reduce((s, m) => s + (m.quantity || 0), 0),
     currentStock: calculateCurrentStock()
   };
 
-  // ------- Filtres -------
+  // Filtres
   const inPeriod = (dateStr: string) => {
     if (selectedPeriod === 'all') return true;
     const d = new Date(dateStr).getTime();
@@ -212,7 +179,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const filteredHistory = history.filter(m => inPeriod(m.date) && inRange(m.date) && typeOK(m.type));
 
-  // ------- Helpers UI -------
+  // UI helpers
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'initial':
@@ -244,7 +211,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
-  // ------- helpers image logo -> dataURL -------
+  // image -> dataURL
   const loadImageAsDataURL = (url: string): Promise<string> =>
     new Promise((resolve) => {
       try {
@@ -259,14 +226,14 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           ctx.drawImage(img, 0, 0);
           resolve(canvas.toDataURL('image/png'));
         };
-        img.onerror = () => resolve(''); // ignore
+        img.onerror = () => resolve('');
         img.src = url;
       } catch {
         resolve('');
       }
     });
 
-  // ------- Export PDF -------
+  // Export PDF
   const exportStockPDF = async () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -288,7 +255,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       if (dataUrl) {
         const imgW = 90;
         const imgH = 30;
-        doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - imgW,  imgH + 6, imgW, imgH, undefined, 'FAST');
+        doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - imgW, imgH + 6, imgW, imgH, undefined, 'FAST');
       }
     }
 
@@ -360,9 +327,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             })}`;
             const qty = Number(h.quantity ?? 0);
             const qtyText = `${qty > 0 ? '+' : ''}${qty.toFixed(3)} ${product.unit}`;
-            const prev = Number(h.previousStock ?? 0);
-            const next = Number(h.newStock ?? 0);
-            const stockText = `${prev.toFixed(3)} → ${next.toFixed(3)}`;
+            const stockText = `${Number(h.previousStock ?? 0).toFixed(3)} → ${Number(h.newStock ?? 0).toFixed(3)}`;
             return [
               dateTime,
               getMovementLabel(h.type),
@@ -483,7 +448,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
               </select>
             </div>
 
-            {/* Du */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Du</label>
               <input
@@ -494,7 +458,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
               />
             </div>
 
-            {/* Au */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Au</label>
               <input
@@ -505,7 +468,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
               />
             </div>
 
-            {/* Export PDF */}
             <div className="flex items-end">
               <button
                 onClick={exportStockPDF}
@@ -518,98 +480,106 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Liste mouvements (UI) */}
+        {/* Liste mouvements */}
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {filteredHistory.length > 0 ? (
-              filteredHistory.map((movement: any) => (
-                <div
-                  key={movement.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600">
-                      {getMovementIcon(movement.type)}
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {getMovementLabel(movement.type)}
-                        </span>
-                        <span className={`font-bold ${getMovementColor(Number(movement.quantity ?? 0))}`}>
-                          {(Number(movement.quantity ?? 0)) > 0 ? '+' : ''}
-                          {Number(movement.quantity ?? 0).toFixed(3)} {product.unit}
-                        </span>
+              filteredHistory.map((movement: any) => {
+                const isCancel = movement.type === 'order_cancel_return';
+                const stockAfter =
+                  isCancel
+                    ? '0.000 → 0.000' // display requirement for cancelled orders
+                    : `${Number(movement.previousStock ?? 0).toFixed(3)} → ${Number(movement.newStock ?? 0).toFixed(3)}`;
+
+                return (
+                  <div
+                    key={movement.id}
+                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600">
+                        {getMovementIcon(movement.type)}
                       </div>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="w-3 h-3" />
-                          <span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Clock className="w-3 h-3" />
-                          <span>
-                            {new Date(movement.date).toLocaleTimeString('fr-FR', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {getMovementLabel(movement.type)}
+                          </span>
+                          <span className={`font-bold ${getMovementColor(movement.quantity ?? 0)}`}>
+                            {(movement.quantity ?? 0) > 0 ? '+' : ''}
+                            {Number(movement.quantity ?? 0).toFixed(3)} {product.unit}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-1">
-                          <User className="w-3 h-3" />
-                          <span>{movement.userName}</span>
-                        </div>
-                        {movement.reason && (
+                        <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
                           <div className="flex items-center space-x-1">
-                            <FileText className="w-3 h-3" />
-                            <span>{movement.reason}</span>
+                            <Calendar className="w-3 h-3" />
+                            <span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span>
                           </div>
-                        )}
-                        {movement.reference && (
                           <div className="flex items-center space-x-1">
-                            <span className="font-mono text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">
-                              {movement.reference}
+                            <Clock className="w-3 h-3" />
+                            <span>
+                              {new Date(movement.date).toLocaleTimeString('fr-FR', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
                             </span>
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            <User className="w-3 h-3" />
+                            <span>{movement.userName}</span>
+                          </div>
+                          {movement.reason && (
+                            <div className="flex items-center space-x-1">
+                              <FileText className="w-3 h-3" />
+                              <span>{movement.reason}</span>
+                            </div>
+                          )}
+                          {movement.reference && (
+                            <div className="flex items-center space-x-1">
+                              <span className="font-mono text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">
+                                {movement.reference}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {movement.orderId && (
+                          <button
+                            onClick={() => handleViewOrder(movement.orderId!)}
+                            className="inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                            title="Voir la commande"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Commande</span>
+                          </button>
+                        )}
+
+                        {movement.orderDetails && (
+                          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-700">
+                            <div className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                              <p><strong>Commande:</strong> {movement.orderDetails.orderNumber}</p>
+                              <p><strong>Client:</strong> {movement.orderDetails.clientName} ({movement.orderDetails.clientType === 'personne_physique' ? 'Particulier' : 'Société'})</p>
+                              <p><strong>Total commande:</strong> {Number(movement.orderDetails.orderTotal || 0).toLocaleString()} MAD</p>
+                              <p><strong>Date commande:</strong> {new Date(movement.orderDetails.orderDate).toLocaleDateString('fr-FR')}</p>
+                            </div>
                           </div>
                         )}
                       </div>
+                    </div>
 
-                      {movement.orderId && (
-                        <button
-                          onClick={() => handleViewOrder(movement.orderId!)}
-                          className="inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                          title="Voir la commande"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>Commande</span>
-                        </button>
-                      )}
-
-                      {movement.orderDetails && (
-                        <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-700">
-                          <div className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
-                            <p><strong>Commande:</strong> {movement.orderDetails.orderNumber}</p>
-                            <p><strong>Client:</strong> {movement.orderDetails.clientName} ({movement.orderDetails.clientType === 'personne_physique' ? 'Particulier' : 'Société'})</p>
-                            <p><strong>Total commande:</strong> {Number(movement.orderDetails.orderTotal || 0).toLocaleString()} MAD</p>
-                            <p><strong>Date commande:</strong> {new Date(movement.orderDetails.orderDate).toLocaleDateString('fr-FR')}</p>
-                          </div>
-                        </div>
-                      )}
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {stockAfter}
+                      </div>
+                      <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
                     </div>
                   </div>
-
-                  <div className="text-right">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {Number(movement.previousStock ?? 0).toFixed(3)} → {Number(movement.newStock ?? 0).toFixed(3)}
-                    </div>
-                    <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="text-center py-8">
                 <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-5 00 dark:text-gray-400">Aucun mouvement de stock</p>
+                <p className="text-gray-500 dark:text-gray-400">Aucun mouvement de stock</p>
                 <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
                   L'historique apparaîtra après les premiers mouvements
                 </p>
@@ -665,7 +635,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                       <div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Articles commandés</p>
                         <div className="space-y-2">
-                          {order.items.map((item: any, index: number) => (
+                          {order.items.map((item, index) => (
                             <div
                               key={index}
                               className={`p-3 rounded-lg border ${
@@ -677,7 +647,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                               <div className="flex justify-between items-center">
                                 <span className="font-medium text-gray-900 dark:text-gray-100">{item.productName}</span>
                                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                                  {Number(item.quantity).toFixed(3)} × {Number(item.unitPrice).toFixed(2)} MAD = {Number(item.total).toFixed(2)} MAD
+                                  {item.quantity.toFixed(3)} × {item.unitPrice.toFixed(2)} MAD = {item.total.toFixed(2)} MAD
                                 </span>
                               </div>
                               {item.productName === product.name && (
