@@ -1,5 +1,6 @@
 // src/components/stock/StockHistoryModal.tsx
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useData } from '../../contexts/DataContext';
 import { useOrder } from '../../contexts/OrderContext';
 import { useAuth } from '../../contexts/AuthContext';
