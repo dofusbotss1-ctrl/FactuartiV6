@@ -33,15 +33,12 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'week' | 'month' | 'quarter'>('all');
   const [filterType, setFilterType] = useState<'all' | 'orders' | 'adjustments' | 'initial'>('all');
-
-  // dates
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
-  // Build full history for the product
-  const generateProductHistory = () => {
+  /** Construit l'historique brut du produit (sans prev/new) */
+  const buildBaseHistory = () => {
     const history: any[] = [];
 
     if (product.initialStock > 0) {
@@ -49,9 +46,9 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         id: `initial-${product.id}`,
         type: 'initial',
         date: product.createdAt,
-        quantity: product.initialStock,
+        quantity: Number(product.initialStock) || 0,
         previousStock: 0,
-        newStock: product.initialStock,
+        newStock: Number(product.initialStock) || 0,
         reason: 'Stock initial',
         userName: 'Système',
         reference: '',
@@ -66,9 +63,9 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         id: m.id,
         type: m.type,
         date: m.adjustmentDateTime || m.date,
-        quantity: m.quantity,
-        previousStock: m.previousStock,
-        newStock: m.newStock,
+        quantity: Number(m.quantity) || 0,
+        previousStock: 0,
+        newStock: 0,
         reason: m.reason || 'Rectification',
         userName: m.userName,
         reference: m.reference || '',
@@ -81,15 +78,13 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       m => m.productId === product.id && (m.type === 'order_out' || m.type === 'order_cancel_return')
     );
     orderMoves.forEach(m => {
-      const isCancel = m.type === 'order_cancel_return';
       history.push({
         id: m.id,
         type: m.type,
         date: m.adjustmentDateTime || m.date,
-        quantity: m.quantity,
-        // important: cancelled order must display 0 → 0 in “Stock après mouvement”
-        previousStock: isCancel ? 0 : m.previousStock,
-        newStock: isCancel ? 0 : m.newStock,
+        quantity: Number(m.quantity) || 0, // livrée: -, annulation: +
+        previousStock: 0,
+        newStock: 0,
         reason: m.type === 'order_out' ? 'Commande livrée' : 'Commande annulée',
         userName: m.userName,
         reference: m.reference || '',
@@ -98,12 +93,34 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       });
     });
 
-    return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return history;
   };
 
-  const history = generateProductHistory();
+  /** Rejoue les mouvements pour calculer previous/new corrects (clé pour l'annulation) */
+  const enrichWithRunningStock = (base: any[]) => {
+    const asc = [...base].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    let running = 0;
 
-  // Résumé
+    asc.forEach(item => {
+      if (item.type === 'initial') {
+        // Pourquoi: point de départ unique connu
+        item.previousStock = 0;
+        running = Number(item.quantity) || 0;
+        item.newStock = running;
+      } else {
+        item.previousStock = running;
+        running += Number(item.quantity) || 0; // + pour annulation, - pour livraison, +/- pour rectif
+        item.newStock = running;
+      }
+    });
+
+    // pour l'affichage on veut le plus récent en premier
+    return asc.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
+
+  const history = enrichWithRunningStock(buildBaseHistory());
+
+  // ------- Résumé -------
   const calculateCurrentStock = () => {
     const initial = product.initialStock || 0;
     const adjustments = stockMovements
@@ -142,7 +159,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     currentStock: calculateCurrentStock()
   };
 
-  // Filtres
+  // ------- Filtres -------
   const inPeriod = (dateStr: string) => {
     if (selectedPeriod === 'all') return true;
     const d = new Date(dateStr).getTime();
@@ -177,9 +194,10 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     return true;
   };
 
+  // IMPORTANT: filtrer APRÈS calcul pour garder prev/new corrects
   const filteredHistory = history.filter(m => inPeriod(m.date) && inRange(m.date) && typeOK(m.type));
 
-  // UI helpers
+  // ------- Helpers UI -------
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'initial':
@@ -211,7 +229,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
-  // image -> dataURL
+  // ------- helpers image logo -> dataURL -------
   const loadImageAsDataURL = (url: string): Promise<string> =>
     new Promise((resolve) => {
       try {
@@ -233,7 +251,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       }
     });
 
-  // Export PDF
+  // ------- Export PDF -------
   const exportStockPDF = async () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -484,98 +502,90 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {filteredHistory.length > 0 ? (
-              filteredHistory.map((movement: any) => {
-                const isCancel = movement.type === 'order_cancel_return';
-                const stockAfter =
-                  isCancel
-                    ? '0.000 → 0.000' // display requirement for cancelled orders
-                    : `${Number(movement.previousStock ?? 0).toFixed(3)} → ${Number(movement.newStock ?? 0).toFixed(3)}`;
-
-                return (
-                  <div
-                    key={movement.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600">
-                        {getMovementIcon(movement.type)}
+              filteredHistory.map((movement: any) => (
+                <div
+                  key={movement.id}
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600">
+                      {getMovementIcon(movement.type)}
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {getMovementLabel(movement.type)}
+                        </span>
+                        <span className={`font-bold ${getMovementColor(movement.quantity ?? 0)}`}>
+                          {(movement.quantity ?? 0) > 0 ? '+' : ''}
+                          {Number(movement.quantity ?? 0).toFixed(3)} {product.unit}
+                        </span>
                       </div>
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {getMovementLabel(movement.type)}
-                          </span>
-                          <span className={`font-bold ${getMovementColor(movement.quantity ?? 0)}`}>
-                            {(movement.quantity ?? 0) > 0 ? '+' : ''}
-                            {Number(movement.quantity ?? 0).toFixed(3)} {product.unit}
+                      <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="w-3 h-3" />
+                          <span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Clock className="w-3 h-3" />
+                          <span>
+                            {new Date(movement.date).toLocaleTimeString('fr-FR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center space-x-1">
+                          <User className="w-3 h-3" />
+                          <span>{movement.userName}</span>
+                        </div>
+                        {movement.reason && (
                           <div className="flex items-center space-x-1">
-                            <Calendar className="w-3 h-3" />
-                            <span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span>
+                            <FileText className="w-3 h-3" />
+                            <span>{movement.reason}</span>
                           </div>
+                        )}
+                        {movement.reference && (
                           <div className="flex items-center space-x-1">
-                            <Clock className="w-3 h-3" />
-                            <span>
-                              {new Date(movement.date).toLocaleTimeString('fr-FR', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                            <span className="font-mono text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">
+                              {movement.reference}
                             </span>
                           </div>
-                          <div className="flex items-center space-x-1">
-                            <User className="w-3 h-3" />
-                            <span>{movement.userName}</span>
+                        )}
+                      </div>
+
+                      {movement.orderId && (
+                        <button
+                          onClick={() => handleViewOrder(movement.orderId!)}
+                          className="inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                          title="Voir la commande"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Commande</span>
+                        </button>
+                      )}
+
+                      {movement.orderDetails && (
+                        <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-700">
+                          <div className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                            <p><strong>Commande:</strong> {movement.orderDetails.orderNumber}</p>
+                            <p><strong>Client:</strong> {movement.orderDetails.clientName} ({movement.orderDetails.clientType === 'personne_physique' ? 'Particulier' : 'Société'})</p>
+                            <p><strong>Total commande:</strong> {Number(movement.orderDetails.orderTotal || 0).toLocaleString()} MAD</p>
+                            <p><strong>Date commande:</strong> {new Date(movement.orderDetails.orderDate).toLocaleDateString('fr-FR')}</p>
                           </div>
-                          {movement.reason && (
-                            <div className="flex items-center space-x-1">
-                              <FileText className="w-3 h-3" />
-                              <span>{movement.reason}</span>
-                            </div>
-                          )}
-                          {movement.reference && (
-                            <div className="flex items-center space-x-1">
-                              <span className="font-mono text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">
-                                {movement.reference}
-                              </span>
-                            </div>
-                          )}
                         </div>
-
-                        {movement.orderId && (
-                          <button
-                            onClick={() => handleViewOrder(movement.orderId!)}
-                            className="inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                            title="Voir la commande"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            <span>Commande</span>
-                          </button>
-                        )}
-
-                        {movement.orderDetails && (
-                          <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-700">
-                            <div className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
-                              <p><strong>Commande:</strong> {movement.orderDetails.orderNumber}</p>
-                              <p><strong>Client:</strong> {movement.orderDetails.clientName} ({movement.orderDetails.clientType === 'personne_physique' ? 'Particulier' : 'Société'})</p>
-                              <p><strong>Total commande:</strong> {Number(movement.orderDetails.orderTotal || 0).toLocaleString()} MAD</p>
-                              <p><strong>Date commande:</strong> {new Date(movement.orderDetails.orderDate).toLocaleDateString('fr-FR')}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {stockAfter}
-                      </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
+                      )}
                     </div>
                   </div>
-                );
-              })
+
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {Number(movement.previousStock ?? 0).toFixed(3)} → {Number(movement.newStock ?? 0).toFixed(3)}
+                    </div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
+                  </div>
+                </div>
+              ))
             ) : (
               <div className="text-center py-8">
                 <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
