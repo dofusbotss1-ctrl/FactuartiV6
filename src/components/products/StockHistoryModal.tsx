@@ -37,15 +37,14 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const [endDate, setEndDate] = useState<string>('');
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
-  // --- utils
+  // --- utils (why: garantir le signe pour calculs)
   const normQty = (type: string, q: number) => {
-    // Pourquoi: garantir le bon signe pour le calcul de stock
     if (type === 'order_out') return -Math.abs(q);
     if (type === 'order_cancel_return') return Math.abs(q);
     return q;
   };
 
-  // Déduplication pour éviter les doublons ré-importés
+  // déduplication *par type* (why: éviter doublons stricts, ne jamais fusionner livré vs annulé)
   const dedupeOrderMovements = (movs: any[]) => {
     const map = new Map<string, any>();
     for (const m of movs) {
@@ -58,10 +57,10 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         qty.toFixed(3),
       ].join('|');
 
-      const cur = map.get(key);
-      if (!cur) map.set(key, m);
+      const current = map.get(key);
+      if (!current) map.set(key, m);
       else {
-        const d1 = new Date(cur.adjustmentDateTime || cur.date).getTime();
+        const d1 = new Date(current.adjustmentDateTime || current.date).getTime();
         const d2 = new Date(m.adjustmentDateTime || m.date).getTime();
         if (d2 >= d1) map.set(key, m); // garder le plus récent
       }
@@ -69,11 +68,47 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     return Array.from(map.values());
   };
 
-  /** Historique complet (avec reconstruction de la sortie si manquante) */
+  // snapshot livré si annulation sans ligne livrée (why: conserver la trace historique même après annulation/suppression)
+  const ensureDeliveredSnapshotForCancellations = (movs: any[]) => {
+    const haveOut = new Set<string>();
+    movs.forEach(m => {
+      if (m.type === 'order_out') {
+        haveOut.add(`${m.orderId || ''}|${m.productId || ''}`);
+      }
+    });
+
+    const extras: any[] = [];
+    movs.forEach(m => {
+      if (m.type !== 'order_cancel_return') return;
+      const key = `${m.orderId || ''}|${m.productId || ''}`;
+      if (!haveOut.has(key)) {
+        const baseDate = new Date(m.adjustmentDateTime || m.date);
+        const deliveredDate = new Date(baseDate.getTime() - 60 * 1000).toISOString(); // 1 min avant
+        extras.push({
+          id: `synt-order_out-${m.orderId || 'noid'}-${m.productId || 'noprod'}`,
+          type: 'order_out',
+          date: deliveredDate,
+          quantity: -Math.abs(Number(m.quantity || 0)),
+          previousStock: 0,
+          newStock: 0,
+          reason: 'Commande livrée (archivé)',
+          userName: m.userName || 'Système',
+          reference: m.reference || '',
+          orderId: m.orderId || null,
+          orderDetails: m.orderDetails || null,
+          __synthetic: true
+        });
+        haveOut.add(key);
+      }
+    });
+
+    return [...movs, ...extras];
+  };
+
+  /** Historique brut */
   const buildBaseHistory = () => {
     const history: any[] = [];
 
-    // Initial
     if ((product.initialStock || 0) > 0) {
       history.push({
         id: `initial-${product.id}`,
@@ -109,58 +144,14 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         });
       });
 
-    // Mouvements commandes depuis stockMovements (dédupliqués)
-    const orderMovementsFromSMRaw = stockMovements.filter(
+    // Mouvements commandes depuis SM → dédupliqués → +snapshots livrés si nécessaire
+    const orderSMraw = stockMovements.filter(
       m => m.productId === product.id && (m.type === 'order_out' || m.type === 'order_cancel_return')
     );
-    const orderMovementsFromSM = dedupeOrderMovements(orderMovementsFromSMRaw);
+    const orderSMdedup = dedupeOrderMovements(orderSMraw);
+    const orderSMfinal = ensureDeliveredSnapshotForCancellations(orderSMdedup);
 
-    // Index des "order_out" existants (pour détecter les sorties manquantes après annulation)
-    const outKeys = new Set(
-      orderMovementsFromSM
-        .filter(m => m.type === 'order_out')
-        .map(m => `${m.orderId || ''}|${m.productId || ''}|${Math.abs(Number(m.quantity || 0)).toFixed(3)}`)
-    );
-
-    // Reconstruction d'une sortie fantôme si on a un retour sans sortie
-    const ghosts: any[] = [];
-    for (const c of orderMovementsFromSM.filter(m => m.type === 'order_cancel_return')) {
-      const k = `${c.orderId || ''}|${c.productId || ''}|${Math.abs(Number(c.quantity || 0)).toFixed(3)}`;
-      if (!outKeys.has(k)) {
-        const cancelDate = new Date(c.adjustmentDateTime || c.date);
-        const outDate = new Date(cancelDate.getTime() - 60 * 1000); // 1 min avant: ordre logique
-        const maybeOrder = c.orderId ? getOrderById(String(c.orderId)) : null;
-
-        ghosts.push({
-          id: `ghost-out-${c.id}`,
-          type: 'order_out',
-          date: outDate.toISOString(),
-          quantity: -Math.abs(Number(c.quantity || 0)),
-          previousStock: 0,
-          newStock: 0,
-          reason: 'Commande livrée (reconstituée)',
-          userName: c.userName || maybeOrder?.createdByName || 'Système',
-          reference: c.reference || maybeOrder?.number || '',
-          orderId: c.orderId || maybeOrder?.id || null,
-          orderDetails: maybeOrder
-            ? {
-                orderNumber: maybeOrder.number,
-                clientName:
-                  maybeOrder.clientType === 'personne_physique'
-                    ? maybeOrder.clientName
-                    : maybeOrder.client?.name,
-                clientType: maybeOrder.clientType,
-                orderTotal: maybeOrder.totalTTC,
-                orderDate: maybeOrder.orderDate
-              }
-            : null
-        });
-        outKeys.add(k);
-      }
-    }
-
-    // Push: order_out / order_cancel_return + éventuels ghosts
-    [...orderMovementsFromSM, ...ghosts].forEach(m => {
+    orderSMfinal.forEach(m => {
       history.push({
         id: m.id,
         type: m.type,
@@ -168,9 +159,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         quantity: normQty(m.type, Number(m.quantity) || 0),
         previousStock: 0,
         newStock: 0,
-        reason: m.type === 'order_out'
-          ? (m.reason || 'Commande livrée')
-          : (m.reason || 'Commande annulée'),
+        reason: m.type === 'order_out' ? (m.reason || 'Commande livrée') : (m.reason || 'Commande annulée'),
         userName: m.userName,
         reference: m.reference || '',
         orderId: m.orderId || null,
@@ -178,46 +167,51 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       });
     });
 
-    // Ordes livrés présents dans orders mais absents des mouvements → synthèse
-    const smOrderIds = new Set(orderMovementsFromSM.map(m => String(m.orderId || '')));
+    // Synthèse depuis orders uniquement pour les *livrées* absentes de SM
+    const smOutKeys = new Set(
+      orderSMfinal
+        .filter(m => m.type === 'order_out')
+        .map(m => `${m.orderId || ''}|${m.productId || ''}`)
+    );
+
     orders.forEach(order => {
-      if (order.status !== 'livre') return;          // on ne crée pas de sortie si annulée
-      if (smOrderIds.has(String(order.id))) return;  // déjà dans les mouvements
+      if (order.status !== 'livre') return;
 
-      const qtyForProduct = (order.items || [])
+      (order.items || [])
         .filter((i: any) => i?.productName === product.name)
-        .reduce((s: number, i: any) => s + Number(i?.quantity || 0), 0);
+        .forEach((i: any) => {
+          const key = `${order.id}|${i.productId || product.id}`;
+          if (smOutKeys.has(key)) return;
 
-      if (qtyForProduct > 0) {
-        const date =
-          (order.deliveryDate as any) ||
-          (order.updatedAt as any) ||
-          (order.orderDate as any) ||
-          new Date().toISOString();
+          const qty = Number(i?.quantity || 0);
+          if (qty <= 0) return;
 
-        history.push({
-          id: `ord-${order.id}-${product.id}`,
-          type: 'order_out',
-          date,
-          quantity: -Math.abs(qtyForProduct),
-          previousStock: 0,
-          newStock: 0,
-          reason: 'Commande livrée',
-          userName: order.createdByName || order.userName || 'Système',
-          reference: order.number || '',
-          orderId: order.id,
-          orderDetails: {
-            orderNumber: order.number,
-            clientName:
-              order.clientType === 'personne_physique'
-                ? order.clientName
-                : order.client?.name,
-            clientType: order.clientType,
-            orderTotal: order.totalTTC,
-            orderDate: order.orderDate
-          }
+          const date =
+            (order.deliveryDate as any) ||
+            (order.updatedAt as any) ||
+            (order.orderDate as any) ||
+            new Date().toISOString();
+
+          history.push({
+            id: `ord-${order.id}-${product.id}`,
+            type: 'order_out',
+            date,
+            quantity: -Math.abs(qty),
+            previousStock: 0,
+            newStock: 0,
+            reason: 'Commande livrée',
+            userName: order.createdByName || order.userName || 'Système',
+            reference: order.number || '',
+            orderId: order.id,
+            orderDetails: {
+              orderNumber: order.number,
+              clientName: order.clientType === 'personne_physique' ? order.clientName : order.client?.name,
+              clientType: order.clientType,
+              orderTotal: order.totalTTC,
+              orderDate: order.orderDate
+            }
+          });
         });
-      }
     });
 
     return history;
@@ -249,7 +243,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const history = enrichWithRunningStock(buildBaseHistory());
 
-  // ------- Résumé (source de vérité = dernier newStock) -------
+  // ------- Résumé -------
   const summary = {
     initialStock: product.initialStock || 0,
     totalOrdersSold: orders.reduce((sum, order) => {
@@ -454,8 +448,9 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             const stockText = `${Number(h.previousStock ?? 0).toFixed(3)} --> ${Number(h.newStock ?? 0).toFixed(3)}`;
 
             let clientText = '—';
-            if (h.orderDetails?.clientName) clientText = String(h.orderDetails.clientName);
-            else if (h.orderId) {
+            if (h.orderDetails?.clientName) {
+              clientText = String(h.orderDetails.clientName);
+            } else if (h.orderId) {
               const od = getOrderById(h.orderId);
               if (od) {
                 clientText = od.clientType === 'personne_physique' ? (od.clientName || '—') : (od.client?.name || '—');
@@ -476,10 +471,263 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       bodyStyles: { lineColor: [226, 232, 240] },
       alternateRowStyles: { fillColor: [250, 250, 250] },
       theme: 'grid',
-      columnStyles: { 0: { cellWidth: 130 }, 1: { cellWidth: 110 }, 2: { cellWidth: 100 }, 3: { cellWidth: 120 }, 4: { cellWidth: 150 }, 5: { cellWidth: 100 } },
+      columnStyles: {
+        0: { cellWidth: 130 },
+        1: { cellWidth: 110 },
+        2: { cellWidth: 100 },
+        3: { cellWidth: 120 },
+        4: { cellWidth: 150 },
+        5: { cellWidth: 100 }
+      },
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 2) {
           const txt = String(data.cell.raw || '');
           if (txt.startsWith('+')) data.cell.styles.textColor = [22, 163, 74];
           else if (txt.startsWith('-')) data.cell.styles.textColor = [220, 38, 38];
-       
+        }
+      }
+    });
+
+    const filename = `historique_${product.name.replace(/\s+/g, '_')}.pdf`;
+    doc.save(filename);
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Historique du Stock" size="xl">
+      <div className="space-y-6">
+        {/* Header + résumé */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-700">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <Package className="w-8 h-8 text-blue-600" />
+              <div>
+                <h3 className="text-xl font-bold text-blue-900 dark:text-blue-100">{product.name}</h3>
+                <p className="text-blue-700 dark:text-blue-300">
+                  {product.category} • {product.unit}
+                </p>
+              </div>
+            </div>
+            <button onClick={exportStockPDF} className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+              <Download className="w-4 h-4" />
+              <span>Export PDF</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-600">
+              <div className="text-lg font-bold text-blue-600">{summary.initialStock.toFixed(3)}</div>
+              <div className="text-xs text-blue-700 dark:text-blue-300">Stock initial</div>
+            </div>
+            <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-red-200 dark:border-red-600">
+              <div className="text-lg font-bold text-red-600">{summary.totalOrdersSold.toFixed(3)}</div>
+              <div className="text-xs text-red-700 dark:text-red-300">Total commandé</div>
+            </div>
+            <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-600">
+              <div className={`text-lg font-bold ${summary.totalAdjustments >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {summary.totalAdjustments > 0 ? '+' : ''}
+                {summary.totalAdjustments.toFixed(3)}
+              </div>
+              <div className="text-xs text-purple-700 dark:text-purple-300">Rectifications</div>
+            </div>
+            <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-green-200 dark:border-green-600">
+              <div className="text-lg font-bold text-green-600">{summary.currentStock.toFixed(3)}</div>
+              <div className="text-xs text-green-700 dark:text-green-300">Stock actuel</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filtres */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Période rapide</label>
+              <select
+                value={selectedPeriod}
+                onChange={e => setSelectedPeriod(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="all">Toute la période</option>
+                <option value="week">7 derniers jours</option>
+                <option value="month">30 derniers jours</option>
+                <option value="quarter">3 derniers mois</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type de mouvement</label>
+              <select
+                value={filterType}
+                onChange={e => setFilterType(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="all">Tous</option>
+                <option value="orders">Commandes</option>
+                <option value="adjustments">Rectifications</option>
+                <option value="initial">Stock initial</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Du</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Au</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={exportStockPDF}
+                className="w-full inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>Export PDF</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Liste mouvements */}
+        <div className="max-h-96 overflow-y-auto">
+          <div className="space-y-3">
+            {filteredHistory.length > 0 ? (
+              filteredHistory.map((movement: any) => (
+                <div
+                  key={movement.id}
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600">
+                      {getMovementIcon(movement.type)}
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {getMovementLabel(movement.type)}
+                        </span>
+                        <span className={`font-bold ${getMovementColor(movement.quantity ?? 0)}`}>
+                          {(movement.quantity ?? 0) > 0 ? '+' : ''}
+                          {Number(movement.quantity ?? 0).toFixed(3)} {product.unit}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="w-3 h-3" />
+                          <span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Clock className="w-3 h-3" />
+                          <span>
+                            {new Date(movement.date).toLocaleTimeString('fr-FR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <User className="w-3 h-3" />
+                          <span>{movement.userName}</span>
+                        </div>
+                        {movement.reference && (
+                          <div className="flex items-center space-x-1">
+                            <span className="font-mono text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">
+                              {movement.reference}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {movement.orderId && (
+                        <button
+                          onClick={() => handleViewOrder(movement.orderId!)}
+                          className="inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                          title="Voir la commande"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          <span>Commande</span>
+                        </button>
+                      )}
+
+                      {movement.orderDetails && (
+                        <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-700">
+                          <div className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                            <p><strong>Commande:</strong> {movement.orderDetails.orderNumber}</p>
+                            <p><strong>Client:</strong> {movement.orderDetails.clientName} ({movement.orderDetails.clientType === 'personne_physique' ? 'Particulier' : 'Société'})</p>
+                            <p><strong>Total commande:</strong> {Number(movement.orderDetails.orderTotal || 0).toLocaleString()} MAD</p>
+                            <p><strong>Date commande:</strong> {new Date(movement.orderDetails.orderDate).toLocaleDateString('fr-FR')}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      {Number(movement.previousStock ?? 0).toFixed(3)} → {Number(movement.newStock ?? 0).toFixed(3)}
+                    </div>
+                    <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 dark:text-gray-400">Aucun mouvement de stock</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                  L'historique apparaîtra après les premiers mouvements
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modal commande liée */}
+        {viewingOrder && (
+          <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Détails de la Commande</h3>
+                  <button onClick={() => setViewingOrder(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                {(() => {
+                  const order = getOrderById(viewingOrder);
+                  if (!order) {
+                    return <div className="text-center py-8"><p className="text-gray-500 dark:text-gray-400">Commande non trouvée</p></div>;
+                  }
+                  return (
+                    <div className="space-y-4">
+                      {/* détails */}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-6">
+          <button onClick={onClose} className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">
+            Fermer
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
