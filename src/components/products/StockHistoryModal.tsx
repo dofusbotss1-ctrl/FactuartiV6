@@ -44,11 +44,9 @@ type HistoryRow = {
 };
 
 export default function StockHistoryModal({ isOpen, onClose, product }: StockHistoryModalProps) {
-  // cast any => tolère deleteStockMovement sans casser TS si non typé
   const dataCtx: any = useData();
   const stockMovements = dataCtx.stockMovements as any[];
   const deleteStockMovement = dataCtx.deleteStockMovement as undefined | ((id: string) => Promise<void>);
-
   const { orders, getOrderById } = useOrder();
   const { user } = useAuth();
 
@@ -58,7 +56,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const [endDate, setEndDate] = useState<string>('');
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
-  // UI delete
   const [toDelete, setToDelete] = useState<HistoryRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -88,7 +85,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const ensureDeliveredSnapshotForCancellations = (movs: any[]) => {
     const outKeys = new Set<string>();
     movs.forEach(m => m.type === 'order_out' && outKeys.add(`${m.orderId || ''}|${m.productId || ''}`));
-
     const extras: any[] = [];
     movs.forEach(m => {
       if (m.type !== 'order_cancel_return') return;
@@ -98,7 +94,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         extras.push({
           id: `synt-order_out-${m.orderId || 'noid'}-${m.productId || product.id}`,
           type: 'order_out',
-          date: new Date(base - 60 * 1000).toISOString(), // avant annulation
+          date: new Date(base - 60 * 1000).toISOString(),
           quantity: -Math.abs(Number(m.quantity || 0)),
           previousStock: 0,
           newStock: 0,
@@ -178,9 +174,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     });
 
     const smOutKeys = new Set(
-      orderSMfinal
-        .filter(m => m.type === 'order_out')
-        .map(m => `${m.orderId || ''}|${m.productId || ''}`)
+      orderSMfinal.filter(m => m.type === 'order_out').map(m => `${m.orderId || ''}|${m.productId || ''}`)
     );
 
     orders.forEach(order => {
@@ -238,30 +232,24 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         item.newStock = running;
       }
     });
+    // retour en DESC (plus récent en haut)
     return asc.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   const history = useMemo(() => enrichWithRunningStock(buildBaseHistory()), [stockMovements, orders, product]);
 
-  // résumé
   const summary = {
     initialStock: product.initialStock || 0,
     totalOrdersSold: orders.reduce((sum, order) => {
       if (order.status === 'livre') {
-        return (
-          sum +
-          order.items.filter((i: any) => i.productName === product.name).reduce((x: number, i: any) => x + (i.quantity || 0), 0)
-        );
+        return sum + order.items.filter((i: any) => i.productName === product.name).reduce((x: number, i: any) => x + (i.quantity || 0), 0);
       }
       return sum;
     }, 0),
-    totalAdjustments: stockMovements
-      .filter(m => m.productId === product.id && m.type === 'adjustment')
-      .reduce((s, m) => s + (m.quantity || 0), 0),
+    totalAdjustments: stockMovements.filter(m => m.productId === product.id && m.type === 'adjustment').reduce((s, m) => s + (m.quantity || 0), 0),
     currentStock: history.length ? Number(history[0].newStock || 0) : Number(product.initialStock || 0)
   };
 
-  // filtres
   const inPeriod = (dateStr: string) => {
     if (selectedPeriod === 'all') return true;
     const d = new Date(dateStr).getTime();
@@ -274,14 +262,8 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const inRange = (dateStr: string) => {
     if (!startDate && !endDate) return true;
     const d = new Date(dateStr);
-    if (startDate) {
-      const s = new Date(startDate); s.setHours(0, 0, 0, 0);
-      if (d < s) return false;
-    }
-    if (endDate) {
-      const e = new Date(endDate); e.setHours(23, 59, 59, 999);
-      if (d > e) return false;
-    }
+    if (startDate) { const s = new Date(startDate); s.setHours(0,0,0,0); if (d < s) return false; }
+    if (endDate) { const e = new Date(endDate); e.setHours(23,59,59,999); if (d > e) return false; }
     return true;
   };
   const typeOK = (t: string) => {
@@ -292,16 +274,15 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     return true;
   };
 
-  // **Ordre d'affichage**: initial FIRST, puis les autres (desc)
-  const filteredHistory = useMemo(() => {
+  /** IMPORTANT: plus récent en haut, **stock initial toujours en bas** */
+  const displayHistory = useMemo(() => {
     const base = history.filter(m => inPeriod(m.date) && inRange(m.date) && typeOK(m.type));
-    const initialIdx = base.findIndex(m => m.type === 'initial');
-    const initial = initialIdx >= 0 ? base.splice(initialIdx, 1)[0] : null;
-    // autres déjà en desc
-    return initial ? [initial, ...base] : base;
+    base.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // desc
+    const initials = base.filter(m => m.type === 'initial');
+    const others = base.filter(m => m.type !== 'initial');
+    return [...others, ...initials]; // initial à la fin
   }, [history, selectedPeriod, startDate, endDate, filterType]);
 
-  // UI helpers
   const getMovementIcon = (type: string) => {
     switch (type) {
       case 'initial': return <Package className="w-4 h-4 text-blue-600" />;
@@ -323,7 +304,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
   const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
-  // image -> dataURL (why: pour logo PDF)
   const loadImageAsDataURL = (url: string): Promise<string> =>
     new Promise((resolve) => {
       try {
@@ -336,11 +316,11 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           ctx.drawImage(img, 0, 0);
           resolve(canvas.toDataURL('image/png'));
         };
-        img.onerror = () => resolve(''); img.src = url;
+        img.onerror = () => resolve('');
+        img.src = url;
       } catch { resolve(''); }
     });
 
-  // Export PDF (utilise le même ordre d’affichage)
   const exportStockPDF = async () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -358,6 +338,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       const dataUrl = await loadImageAsDataURL(logoUrl);
       if (dataUrl) doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - 70, 76, 70, 70, undefined, 'FAST');
     }
+
     doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.setTextColor(15, 23, 42);
     doc.text('Historique du Stock', pageWidth / 2, y, { align: 'center' }); y += 20;
 
@@ -383,10 +364,11 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
     doc.text('Mouvements', lrMargin, y); y += 8;
 
+    // Utiliser displayHistory (DESC + initial en bas)
     const body: RowInput[] =
-      filteredHistory.length === 0
+      displayHistory.length === 0
         ? [['—', '—', '—', '—', '—', '—']]
-        : filteredHistory.map(h => {
+        : displayHistory.map(h => {
             const d = new Date(h.date);
             const dateTime = `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
             const qty = Number(h.quantity ?? 0);
@@ -428,7 +410,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Historique du Stock" size="xl">
       <div className="space-y-6">
-        {/* Header + résumé */}
+        {/* En-tête & résumé */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-700">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
@@ -480,7 +462,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type de mouvement</label>
+              <label className="block text sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type de mouvement</label>
               <select value={filterType} onChange={e => setFilterType(e.target.value as any)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                 <option value="all">Tous</option>
                 <option value="orders">Commandes</option>
@@ -508,11 +490,11 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Liste mouvements (initial FIRST, actions delete si possible) */}
+        {/* Liste mouvements (desc, initial en bas) */}
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
-            {filteredHistory.length > 0 ? (
-              filteredHistory.map((movement) => (
+            {displayHistory.length > 0 ? (
+              displayHistory.map((movement) => (
                 <div key={movement.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center border border-gray-200 dark:border-gray-600">
@@ -526,23 +508,10 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                         </span>
                       </div>
                       <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="w-3 h-3" />
-                          <span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{new Date(movement.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <User className="w-3 h-3" />
-                          <span>{movement.userName}</span>
-                        </div>
-                        {movement.reference && (
-                          <div className="flex items-center space-x-1">
-                            <span className="font-mono text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">{movement.reference}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center space-x-1"><Calendar className="w-3 h-3" /><span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span></div>
+                        <div className="flex items-center space-x-1"><Clock className="w-3 h-3" /><span>{new Date(movement.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span></div>
+                        <div className="flex items-center space-x-1"><User className="w-3 h-3" /><span>{movement.userName}</span></div>
+                        {movement.reference && (<div className="flex items-center space-x-1"><span className="font-mono text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">{movement.reference}</span></div>)}
                       </div>
 
                       {movement.orderId && (
@@ -562,13 +531,8 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                       <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
                     </div>
 
-                    {/* Supprimer uniquement si ce mouvement vient du store (pas synthétique/initial) */}
                     {movement.__source === 'stockMovements' && (
-                      <button
-                        onClick={() => setToDelete(movement)}
-                        className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
-                        title="Supprimer ce mouvement"
-                      >
+                      <button onClick={() => setToDelete(movement)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors" title="Supprimer ce mouvement">
                         <Trash2 className="w-5 h-5" />
                       </button>
                     )}
@@ -585,7 +549,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Modal commande liée (inchangé) */}
+        {/* Modal commande liée */}
         {viewingOrder && (
           <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -608,44 +572,24 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         )}
 
-        {/* Confirm delete (animé) */}
+        {/* Confirm delete */}
         <AnimatePresence>
           {toDelete && (
-            <motion.div
-              className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            >
-              <motion.div
-                className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              >
+            <motion.div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6" initial={{ scale: 0.9, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 20 }}>
                 <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Supprimer le mouvement ?</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                  Cette action est irréversible. Confirmer la suppression de <span className="font-medium">{getMovementLabel(toDelete.type)}</span> ({Math.abs(toDelete.quantity).toFixed(3)} {product.unit}) ?
+                  Confirmer la suppression de <span className="font-medium">{getMovementLabel(toDelete.type)}</span> ({Math.abs(toDelete.quantity).toFixed(3)} {product.unit}) ?
                 </p>
                 <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => setToDelete(null)}
-                    className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
-                    Non
-                  </button>
+                  <button onClick={() => setToDelete(null)} className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">Non</button>
                   <button
                     onClick={async () => {
-                      if (!deleteStockMovement) { setToDelete(null); setToast('Suppression non disponible'); return; } // why: contexte sans API
+                      if (!deleteStockMovement) { setToDelete(null); setToast('Suppression non disponible'); return; }
                       setDeleting(true);
-                      try {
-                        await deleteStockMovement(toDelete.id);
-                        setToast('Mouvement supprimé avec succès');
-                      } catch (e) {
-                        setToast("Erreur lors de la suppression");
-                      } finally {
-                        setDeleting(false);
-                        setToDelete(null);
-                        setTimeout(() => setToast(null), 2000);
-                      }
+                      try { await deleteStockMovement(toDelete.id); setToast('Mouvement supprimé avec succès'); }
+                      catch { setToast('Erreur lors de la suppression'); }
+                      finally { setDeleting(false); setToDelete(null); setTimeout(() => setToast(null), 2000); }
                     }}
                     disabled={deleting}
                     className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-60"
@@ -658,24 +602,17 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           )}
         </AnimatePresence>
 
-        {/* Toast succès */}
+        {/* Toast */}
         <AnimatePresence>
           {toast && (
-            <motion.div
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 40, opacity: 0 }}
-              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[75] px-4 py-2 rounded-lg bg-green-600 text-white shadow-lg"
-            >
+            <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[75] px-4 py-2 rounded-lg bg-green-600 text-white shadow-lg">
               {toast}
             </motion.div>
           )}
         </AnimatePresence>
 
         <div className="flex justify-end pt-6">
-          <button onClick={onClose} className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">
-            Fermer
-          </button>
+          <button onClick={onClose} className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">Fermer</button>
         </div>
       </div>
     </Modal>
