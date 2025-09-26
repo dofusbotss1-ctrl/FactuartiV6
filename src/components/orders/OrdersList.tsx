@@ -21,10 +21,12 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
-  X,               // close
-  AlertTriangle,   // warning
+  X,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function OrdersList() {
   const { orders, deleteOrder, updateOrder } = useOrder();
@@ -41,10 +43,18 @@ export default function OrdersList() {
   const [statusModalOrder, setStatusModalOrder] = useState<string | null>(null);
   const [createForOrder, setCreateForOrder] = useState<string | null>(null);
 
-  // ✨ nouvel état pour confirmation de suppression
+  // Confirmation de suppression
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
 
-  // === Bloc Année ============================
+  // Toast animé
+  const [toast, setToast] = useState<{ id: number; type: 'success' | 'error'; text: string } | null>(null);
+  const showToast = (type: 'success' | 'error', text: string) => {
+    const id = Date.now();
+    setToast({ id, type, text });
+    window.setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 2500);
+  };
+
+  // --- Années
   const [expandedYears, setExpandedYears] = useState<Record<number, boolean>>({});
   const toggleYearExpansion = (year: number) =>
     setExpandedYears((prev) => ({ ...prev, [year]: !prev[year] }));
@@ -90,7 +100,6 @@ export default function OrdersList() {
 
   const hasInvoiceForOrder = (orderId: string) => invoices.some((invoice) => invoice.orderId === orderId);
 
-  // Autoriser uniquement pour les sociétés, sans facture, et non annulée
   const canCreateInvoice = (order: any) =>
     order.clientType === 'societe' && !hasInvoiceForOrder(order.id) && order.status !== 'annule';
 
@@ -102,27 +111,36 @@ export default function OrdersList() {
     setCreateForOrder(order.id);
   };
 
-  // ✨ Ouvre la modale de confirmation
+  // Ouvre la modale
   const handleDeleteOrder = (orderId: string) => {
     const order = orders.find((o) => o.id === orderId);
     if (!order) return;
     setDeleteTarget(order);
   };
 
-  // ✨ Confirme la suppression (bloque si facture liée)
+  // Confirme la suppression + toast animé
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+
     if (hasInvoiceForOrder(deleteTarget.id)) {
-      alert("Cette commande est liée à une facture. Supprimez d'abord la facture.");
+      showToast('error', "Suppression impossible: facture associée.");
       return;
     }
-    await deleteOrder(deleteTarget.id);
-    setDeleteTarget(null);
+
+    const target = deleteTarget;       // garder pour le message
+    setDeleteTarget(null);             // fermer la modale tout de suite
+
+    try {
+      await deleteOrder(target.id);
+      showToast('success', `Commande ${target.number} supprimée.`);
+    } catch {
+      showToast('error', "Échec de la suppression.");
+    }
   };
 
   const cancelDelete = () => setDeleteTarget(null);
 
-  // ===================== Filtres globaux ======================
+  // Filtres globaux
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       const matchesSearch =
@@ -153,7 +171,7 @@ export default function OrdersList() {
     });
   }, [orders, searchTerm, statusFilter, dateFilter]);
 
-  // ================= Groupement par année =====================
+  // Groupement par année
   const ordersByYear = useMemo(() => {
     return filteredOrders.reduce((acc: Record<number, any[]>, order: any) => {
       const year = new Date(order.orderDate).getFullYear();
@@ -170,7 +188,7 @@ export default function OrdersList() {
     [ordersByYear]
   );
 
-  // Ouvrir toutes les années par défaut
+  // Ouvrir toutes les années
   useEffect(() => {
     setExpandedYears((prev) => {
       const next = { ...prev };
@@ -181,7 +199,7 @@ export default function OrdersList() {
     });
   }, [sortedYears]);
 
-  // ================= Tri (appliqué à chaque bloc) =============
+  // Tri
   const sortComparer = (a: any, b: any) => {
     let aValue: any;
     let bValue: any;
@@ -218,13 +236,13 @@ export default function OrdersList() {
     }
   };
 
-  // ================== Stats année ============================
+  // Stats année
   const getYearStats = (list: any[]) => ({
     count: list.length,
     totalTTC: list.reduce((sum, o) => sum + Number(o.totalTTC || 0), 0),
   });
 
-  // ================== Export CSV =================
+  // Export CSV
   const exportToCSV = () => {
     const csvContent = [
       ['Année', 'N° Commande', 'Date', 'Client', 'Produits', 'Quantité Total', 'Total TTC', 'Statut'].join(','),
@@ -411,7 +429,7 @@ export default function OrdersList() {
         </div>
       </div>
 
-      {/* === Blocs par année (dépliables) ================================== */}
+      {/* Blocs par année */}
       <div className="space-y-6">
         {sortedYears.length > 0 ? (
           sortedYears.map((year) => {
@@ -452,7 +470,7 @@ export default function OrdersList() {
 
                       <button
                         onClick={() => toggleYearExpansion(year)}
-                        className="ml-2 px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm"
+                        className="ml-2 px-3 py-1.5 rounded-lg bg-white/20 hover:bg白/30 text-white text-sm"
                         title={expanded ? 'Masquer' : 'Afficher'}
                       >
                         {expanded ? 'Masquer' : 'Afficher'}
@@ -465,76 +483,32 @@ export default function OrdersList() {
                   </div>
                 </div>
 
-                {/* Tableau de l'année */}
+                {/* Tableau */}
                 {expanded && (
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300">
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700">
                           <tr>
-                            <th
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
-                              onClick={() => handleSort('number')}
-                            >
-                              N° Commande
-                            </th>
-                            <th
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
-                              onClick={() => handleSort('date')}
-                            >
-                              Date Commande
-                            </th>
-                            <th
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
-                              onClick={() => handleSort('client')}
-                            >
-                              Client
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Produits
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Quantité
-                            </th>
-                            <th
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
-                              onClick={() => handleSort('total')}
-                            >
-                              Prix Total
-                            </th>
-                            <th
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
-                              onClick={() => handleSort('status')}
-                            >
-                              Statut
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Actions
-                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort('number')}>N° Commande</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort('date')}>Date Commande</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort('client')}>Client</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Produits</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Quantité</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort('total')}>Prix Total</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" onClick={() => handleSort('status')}>Statut</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                           {yearOrders.map((order) => (
-                            <motion.tr
-                              key={order.id}
-                              className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.25 }}
-                            >
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{order.number}</div>
-                              </td>
+                            <motion.tr key={order.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+                              <td className="px-6 py-4 whitespace-nowrap"><div className="text-sm font-medium text-gray-900 dark:text-gray-100">{order.number}</div></td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div>
-                                  <div className="text-sm text-gray-900 dark:text-gray-100">
-                                    {new Date(order.orderDate).toLocaleDateString('fr-FR')}
-                                  </div>
+                                  <div className="text-sm text-gray-900 dark:text-gray-100">{new Date(order.orderDate).toLocaleDateString('fr-FR')}</div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {new Date(order.orderDate).toLocaleTimeString('fr-FR', {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })}
+                                    {new Date(order.orderDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                                   </div>
                                   {order.deliveryDate && (
                                     <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
@@ -547,19 +521,13 @@ export default function OrdersList() {
                                 <div className="flex items-center space-x-2">
                                   <User className="w-4 h-4 text-gray-400" />
                                   <div>
-                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {getClientName(order)}
-                                    </div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                      {order.clientType === 'personne_physique' ? 'Particulier' : 'Société'}
-                                    </div>
+                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{getClientName(order)}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">{order.clientType === 'personne_physique' ? 'Particulier' : 'Société'}</div>
                                   </div>
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm text-gray-900 dark:text-gray-100">
-                                  {getProductsDisplay(order.items)}
-                                </div>
+                                <div className="text-sm text-gray-900 dark:text-gray-100">{getProductsDisplay(order.items)}</div>
                                 {order.items.length > 1 && (
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
                                     {order.items.map((item: any) => item.productName).join(', ')}
@@ -567,70 +535,38 @@ export default function OrdersList() {
                                 )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                  {new Intl.NumberFormat('fr-FR').format(getTotalQuantity(order.items))}
-                                </div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{new Intl.NumberFormat('fr-FR').format(getTotalQuantity(order.items))}</div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                                  {new Intl.NumberFormat('fr-FR', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  }).format(Number(order.totalTTC || 0))}{' '}
-                                  MAD
+                                  {new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(order.totalTTC || 0))} MAD
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  HT:{' '}
-                                  {new Intl.NumberFormat('fr-FR', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  }).format(Number(order.subtotal || 0))}{' '}
-                                  MAD
+                                  HT: {new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(order.subtotal || 0))} MAD
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(order.status)}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                 <div className="flex items-center space-x-3">
-                                  <button
-                                    onClick={() => setStatusModalOrder(order.id)}
-                                    className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 transition-colors"
-                                    title="Changer le statut"
-                                  >
+                                  <button onClick={() => setStatusModalOrder(order.id)} className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 transition-colors" title="Changer le statut">
                                     <Filter className="w-4 h-4" />
                                   </button>
 
-                                  <Link
-                                    to={`/commandes/${order.id}`}
-                                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-                                    title="Voir détails"
-                                  >
+                                  <Link to={`/commandes/${order.id}`} className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors" title="Voir détails">
                                     <FileText className="w-4 h-4" />
                                   </Link>
 
                                   {canCreateInvoice(order) && (
-                                    <button
-                                      onClick={() => handleCreateInvoice(order)}
-                                      className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 transition-colors"
-                                      title="Créer facture"
-                                    >
+                                    <button onClick={() => handleCreateInvoice(order)} className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 transition-colors" title="Créer facture">
                                       <DollarSign className="w-4 h-4" />
                                     </button>
                                   )}
 
-                                  <Link
-                                    to={`/commandes/${order.id}/modifier`}
-                                    className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
-                                    title="Modifier"
-                                  >
+                                  <Link to={`/commandes/${order.id}/modifier`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors" title="Modifier">
                                     <Edit className="w-4 h-4" />
                                   </Link>
 
-                                  {/* ✨ Supprimer → ouvre la modale */}
-                                  <button
-                                    onClick={() => handleDeleteOrder(order.id)}
-                                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-                                    title="Supprimer"
-                                  >
+                                  <button onClick={() => handleDeleteOrder(order.id)} className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors" title="Supprimer">
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
@@ -651,10 +587,7 @@ export default function OrdersList() {
               {orders.length === 0 ? 'Aucune commande créée' : 'Aucune commande trouvée'}
             </p>
             {orders.length === 0 && (
-              <Link
-                to="/commandes/nouveau"
-                className="mt-4 inline-flex items-center space-x-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
-              >
+              <Link to="/commandes/nouveau" className="mt-4 inline-flex items-center space-x-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
                 <Plus className="w-4 h-4" />
                 <span>Créer votre première commande</span>
               </Link>
@@ -663,7 +596,7 @@ export default function OrdersList() {
         )}
       </div>
 
-      {/* Modal de changement de statut */}
+      {/* Modales existantes */}
       {statusModalOrder && (
         <OrderStatusModal
           isOpen={!!statusModalOrder}
@@ -673,7 +606,6 @@ export default function OrdersList() {
         />
       )}
 
-      {/* Modal de création de facture */}
       {createForOrder && (
         <CreateInvoiceFromOrderModal
           orderId={createForOrder}
@@ -683,12 +615,10 @@ export default function OrdersList() {
         />
       )}
 
-      {/* ✨ Modale de confirmation de suppression */}
+      {/* Confirmation de suppression */}
       {deleteTarget && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          {/* backdrop */}
           <div className="absolute inset-0 bg-black/50" onClick={cancelDelete} aria-hidden />
-          {/* dialog */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -725,8 +655,7 @@ export default function OrdersList() {
                   </button>
                   <button
                     onClick={confirmDelete}
-                    disabled={hasInvoiceForOrder(deleteTarget.id)}
-                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white"
                   >
                     Oui, supprimer
                   </button>
@@ -743,6 +672,35 @@ export default function OrdersList() {
           </motion.div>
         </div>
       )}
+
+      {/* Toast animé succès/erreur */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key={toast.id}
+            initial={{ opacity: 0, y: -16, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -16, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-4 right-4 z-[70]"
+          >
+            <div
+              className={`flex items-center space-x-3 px-4 py-3 rounded-xl shadow-lg border ${
+                toast.type === 'success'
+                  ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200'
+                  : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
+              }`}
+            >
+              {toast.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5" />
+              ) : (
+                <XCircle className="w-5 h-5" />
+              )}
+              <span className="text-sm font-medium">{toast.text}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Guide des actions */}
       <OrderActionsGuide />
