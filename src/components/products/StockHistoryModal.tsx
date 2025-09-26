@@ -303,8 +303,8 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     if (logoUrl) {
       const dataUrl = await loadImageAsDataURL(logoUrl);
       if (dataUrl) {
-        const imgW = 90;
-        const imgH = 30;
+        const imgW = 50;
+        const imgH = 50;
         doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - imgW, imgH + 6, imgW, imgH, undefined, 'FAST');
       }
     }
