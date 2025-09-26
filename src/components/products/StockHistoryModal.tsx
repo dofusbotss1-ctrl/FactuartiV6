@@ -602,17 +602,19 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                           <button onClick={() => setViewingOrder(null)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                             Fermer
                           </button>
-                          {order?.id ? (
-                            <a href={`/commandes/${order.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
-                              <ExternalLink className="w-4 h-4" />
-                              <span>Voir la commande</span>
-                            </a>
-                          ) : viewingOrder.number ? (
-                            <a href={`/commandes?search=${encodeURIComponent(String(viewingOrder.number))}`} className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
-                              <ExternalLink className="w-4 h-4" />
-                              <span>Aller aux commandes</span>
-                            </a>
-                          ) : null}
+
+
+
+
+                          <Link
+                            to={`/orders`}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            title="Voir la Commande"
+                          >
+                            <Eye className="w-4 h-4" /> Voir la Commande
+                          </Link>
+
+                          
                         </div>
                       </div>
                     );
