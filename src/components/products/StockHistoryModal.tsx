@@ -287,9 +287,9 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const exportStockPDF = async () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
-    const lrMargin = 5;
+    const lrMargin = 40;
     const usableWidth = pageWidth - lrMargin * 2;
-    let y = 36;
+    let y = 5;
 
     const companyName = user?.company?.name || '';
     const logoUrl = (user?.company as any)?.logo || (user?.company as any)?.logoUrl || '';
