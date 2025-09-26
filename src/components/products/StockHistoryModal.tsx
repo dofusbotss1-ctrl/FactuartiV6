@@ -19,6 +19,7 @@ import {
   Clock,
   ExternalLink,
   X,
+  Eye,
   Trash2
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
