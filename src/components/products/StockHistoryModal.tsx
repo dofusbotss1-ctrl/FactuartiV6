@@ -26,28 +26,6 @@ interface StockHistoryModalProps {
   product: Product;
 }
 
-/** Pourquoi: assurer des valeurs numériques sûres partout. */
-const toNum = (v: unknown, fallback = 0): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-};
-
-type MovementType = 'initial' | 'order_out' | 'order_cancel_return' | 'adjustment';
-
-type StockRow = {
-  id: string;
-  type: MovementType;
-  date: string | number | Date;
-  quantity: number;           // normalisée (+/-)
-  previousStock: number;      // calculé
-  newStock: number;           // calculé
-  reason?: string;
-  userName?: string;
-  reference?: string;
-  orderId?: string | null;
-  orderDetails?: any | null;
-};
-
 export default function StockHistoryModal({ isOpen, onClose, product }: StockHistoryModalProps) {
   const { stockMovements } = useData();
   const { orders, getOrderById } = useOrder();
@@ -62,19 +40,35 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
   const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
-  // ------- Historique complet du produit (ENRICHI: previous/new stock calculés) -------
-  const generateProductHistory = (): StockRow[] => {
-    const rows: StockRow[] = [];
+  // --- helpers ---
+  const getSignedDelta = (type: string, qtyRaw: any): number => {
+    const q = Number(qtyRaw ?? 0);
+    if (!Number.isFinite(q) || q === 0) return 0;
+    switch (type) {
+      case 'order_out':
+        return q < 0 ? q : -Math.abs(q);
+      case 'order_cancel_return':
+        return q < 0 ? Math.abs(q) : Math.abs(q);
+      case 'adjustment':
+        return q; // peut être +/-
+      case 'initial':
+      default:
+        return q;
+    }
+  };
 
-    // Initial (virtuel si > 0)
-    if (toNum(product.initialStock) !== 0) {
-      rows.push({
+  // ------- Historique complet du produit (avec previous/new calculés si manquants) -------
+  const generateProductHistory = () => {
+    const base: any[] = [];
+
+    if (product.initialStock > 0) {
+      base.push({
         id: `initial-${product.id}`,
         type: 'initial',
-        date: product.createdAt || new Date(0).toISOString(),
-        quantity: toNum(product.initialStock), // +initial
+        date: product.createdAt,
+        quantity: Number(product.initialStock),
         previousStock: 0,
-        newStock: toNum(product.initialStock),
+        newStock: Number(product.initialStock),
         reason: 'Stock initial',
         userName: 'Système',
         reference: '',
@@ -83,100 +77,106 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       });
     }
 
-    // Adjustments
-    stockMovements
-      .filter(m => m.productId === product.id && m.type === 'adjustment')
-      .forEach(m => {
-        rows.push({
-          id: m.id,
-          type: 'adjustment',
-          date: m.adjustmentDateTime || m.date,
-          quantity: toNum(m.quantity), // peut être +/- (on respecte)
-          previousStock: toNum(m.previousStock, NaN),
-          newStock: toNum(m.newStock, NaN),
-          reason: m.reason || 'Rectification',
-          userName: m.userName,
-          reference: m.reference || '',
-          orderId: m.orderId || null,
-          orderDetails: m.orderDetails || null
-        });
+    const adjustments = stockMovements.filter(m => m.productId === product.id && m.type === 'adjustment');
+    adjustments.forEach(m => {
+      base.push({
+        id: m.id,
+        type: m.type,
+        date: m.adjustmentDateTime || m.date,
+        quantity: Number(m.quantity ?? 0),
+        previousStock: m.previousStock ?? null,
+        newStock: m.newStock ?? null,
+        reason: m.reason || 'Rectification',
+        userName: m.userName,
+        reference: m.reference || '',
+        orderId: m.orderId || null,
+        orderDetails: m.orderDetails || null
       });
-
-    // Commandes: sorties & retours d’annulation
-    stockMovements
-      .filter(m => m.productId === product.id && (m.type === 'order_out' || m.type === 'order_cancel_return'))
-      .forEach(m => {
-        const rawQ = toNum(m.quantity);
-        // Normalisation du signe: sortie négative, retour positif.
-        const qty =
-          m.type === 'order_out'
-            ? -Math.abs(rawQ)
-            : Math.abs(rawQ);
-
-        rows.push({
-          id: m.id,
-          type: m.type,
-          date: m.adjustmentDateTime || m.date,
-          quantity: qty,
-          previousStock: toNum(m.previousStock, NaN),
-          newStock: toNum(m.newStock, NaN),
-          reason: m.type === 'order_out' ? 'Commande livrée' : 'Commande annulée',
-          userName: m.userName,
-          reference: m.reference || '',
-          orderId: m.orderId || null,
-          orderDetails: m.orderDetails || null
-        });
-      });
-
-    // 1) tri ascendant pour calcul du running stock
-    const asc = rows.sort((a, b) => new Date(a.date as any).getTime() - new Date(b.date as any).getTime());
-
-    // 2) running stock robuste (ignore les previous/new stock manquants/erronés)
-    let running = 0;
-    // Si la première ligne est "initial" on démarre à 0 puis + initial, sinon on démarre à 0.
-    asc.forEach((r, idx) => {
-      // Toujours recalculer pour cohérence.
-      const prev = idx === 0 ? 0 : running;
-      const next = prev + toNum(r.quantity);
-      r.previousStock = prev;
-      r.newStock = next;
-      running = next;
     });
 
-    // 3) tri descendant pour le rendu
-    return [...asc].sort((a, b) => new Date(b.date as any).getTime() - new Date(a.date as any).getTime());
+    const orderMoves = stockMovements.filter(
+      m => m.productId === product.id && (m.type === 'order_out' || m.type === 'order_cancel_return')
+    );
+    orderMoves.forEach(m => {
+      base.push({
+        id: m.id,
+        type: m.type,
+        date: m.adjustmentDateTime || m.date,
+        quantity: Number(m.quantity ?? 0),
+        previousStock: m.previousStock ?? null,
+        newStock: m.newStock ?? null,
+        reason: m.type === 'order_out' ? 'Commande livrée' : 'Commande annulée',
+        userName: m.userName,
+        reference: m.reference || '',
+        orderId: m.orderId || null,
+        orderDetails: m.orderDetails || null
+      });
+    });
+
+    // Rejouer les mouvements dans l'ordre pour remplir previous/new manquants
+    const asc = base.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    let runningStock = Number(product.initialStock || 0); // pourquoi: source de vérité si pas d'entry "initial"
+
+    for (let i = 0; i < asc.length; i++) {
+      const m = asc[i];
+
+      // si l'entrée "initial" existe, on base runningStock dessus
+      if (i === 0 && m.type === 'initial') {
+        const prev = Number(m.previousStock ?? 0);
+        const next = Number(m.newStock ?? m.quantity ?? 0);
+        m.previousStock = prev;
+        m.newStock = next;
+        runningStock = next;
+        continue;
+      }
+
+      const hasPrev = m.previousStock !== undefined && m.previousStock !== null && !Number.isNaN(Number(m.previousStock));
+      const hasNext = m.newStock !== undefined && m.newStock !== null && !Number.isNaN(Number(m.newStock));
+
+      const prev = hasPrev ? Number(m.previousStock) : runningStock;
+      const next = hasNext ? Number(m.newStock) : prev + getSignedDelta(m.type, m.quantity);
+
+      m.previousStock = prev;
+      m.newStock = next;
+      runningStock = next;
+    }
+
+    // Desc pour affichage
+    return asc.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
-  const history: StockRow[] = generateProductHistory();
+  const history = generateProductHistory();
 
   // ------- Résumé -------
   const calculateCurrentStock = () => {
-    // Pourquoi: se baser sur l’historique réel (fiable pour “Stock après mouvement”).
-    if (history.length === 0) return toNum(product.initialStock);
-    return toNum(history[0].newStock); // histoire triée desc -> [0] = dernier mouvement
+    // pourquoi: inclure aussi les retours d'annulation, pas seulement les commandes livrées
+    const deltas = stockMovements
+      .filter(m => m.productId === product.id)
+      .reduce((sum, m) => sum + getSignedDelta(m.type, m.quantity), 0);
+    return Number(product.initialStock || 0) + deltas;
   };
 
   const summary = {
-    initialStock: toNum(product.initialStock),
+    initialStock: Number(product.initialStock || 0),
     totalOrdersSold: orders.reduce((sum, order) => {
       if (order.status === 'livre') {
         return (
           sum +
           order.items
             .filter(i => i.productName === product.name)
-            .reduce((x, i) => x + toNum(i.quantity), 0)
+            .reduce((x, i) => x + Number(i.quantity || 0), 0)
         );
       }
       return sum;
     }, 0),
     totalAdjustments: stockMovements
       .filter(m => m.productId === product.id && m.type === 'adjustment')
-      .reduce((s, m) => s + toNum(m.quantity), 0),
+      .reduce((s, m) => s + Number(m.quantity || 0), 0),
     currentStock: calculateCurrentStock()
   };
 
   // ------- Filtres -------
-  const inPeriod = (dateStr: string | number | Date) => {
+  const inPeriod = (dateStr: string) => {
     if (selectedPeriod === 'all') return true;
     const d = new Date(dateStr).getTime();
     const now = Date.now();
@@ -186,7 +186,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     return true;
   };
 
-  const inRange = (dateStr: string | number | Date) => {
+  const inRange = (dateStr: string) => {
     if (!startDate && !endDate) return true;
     const d = new Date(dateStr);
     if (startDate) {
@@ -202,7 +202,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     return true;
   };
 
-  const typeOK = (t: MovementType) => {
+  const typeOK = (t: string) => {
     if (filterType === 'all') return true;
     if (filterType === 'orders') return t === 'order_out' || t === 'order_cancel_return';
     if (filterType === 'adjustments') return t === 'adjustment';
@@ -213,7 +213,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const filteredHistory = history.filter(m => inPeriod(m.date) && inRange(m.date) && typeOK(m.type));
 
   // ------- Helpers UI -------
-  const getMovementIcon = (type: MovementType) => {
+  const getMovementIcon = (type: string) => {
     switch (type) {
       case 'initial':
         return <Package className="w-4 h-4 text-blue-600" />;
@@ -227,7 +227,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         return <FileText className="w-4 h-4 text-gray-600" />;
     }
   };
-  const getMovementLabel = (type: MovementType) => {
+  const getMovementLabel = (type: string) => {
     switch (type) {
       case 'initial':
         return 'Stock initial';
@@ -259,7 +259,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           ctx.drawImage(img, 0, 0);
           resolve(canvas.toDataURL('image/png'));
         };
-        img.onerror = () => resolve('');
+        img.onerror = () => resolve(''); // ignore
         img.src = url;
       } catch {
         resolve('');
@@ -274,7 +274,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     const usableWidth = pageWidth - lrMargin * 2;
     let y = 36;
 
-    // En-tête gauche : société
     const companyName = user?.company?.name || '';
     const logoUrl = (user?.company as any)?.logo || (user?.company as any)?.logoUrl || '';
     if (companyName) {
@@ -284,25 +283,21 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       doc.text(companyName, lrMargin, y);
     }
 
-    // En-tête droite : logo (optionnel)
     if (logoUrl) {
       const dataUrl = await loadImageAsDataURL(logoUrl);
       if (dataUrl) {
         const imgW = 90;
         const imgH = 30;
-        // Pourquoi: éviter un placement accidentel trop bas.
-        doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - imgW, y - 20, imgW, imgH, undefined, 'FAST');
+        doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - imgW,  imgH + 6, imgW, imgH, undefined, 'FAST');
       }
     }
 
-    // Titre centré
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
     doc.setTextColor(15, 23, 42);
     doc.text('Historique du Stock', pageWidth / 2, y, { align: 'center' });
     y += 20;
 
-    // Sous-titre
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(12);
     doc.setTextColor(37, 99, 235);
@@ -316,7 +311,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     doc.text(`Généré le ${new Date().toLocaleString('fr-FR')}${filtDates}`, pageWidth / 2, y, { align: 'center' });
     y += 24;
 
-    // Cartes résumé
     const gap = 30;
     const cardW = (usableWidth - gap * 3) / 4;
     const cardH = 64;
@@ -349,26 +343,26 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
     y += cardH + 20;
 
-    // Titre section
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     doc.text('Mouvements', lrMargin, y);
     y += 8;
 
-    // Corps du tableau (utilise l'historique enrichi)
     const body: RowInput[] =
       filteredHistory.length === 0
         ? [['—', '—', '—', '—', '—', '—']]
         : filteredHistory.map(h => {
-            const d = new Date(h.date as any);
+            const d = new Date(h.date);
             const dateTime = `${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', {
               hour: '2-digit',
               minute: '2-digit'
             })}`;
-            const qty = toNum(h.quantity);
+            const qty = Number(h.quantity ?? 0);
             const qtyText = `${qty > 0 ? '+' : ''}${qty.toFixed(3)} ${product.unit}`;
-            const stockText = `${toNum(h.previousStock).toFixed(3)} → ${toNum(h.newStock).toFixed(3)}`;
+            const prev = Number(h.previousStock ?? 0);
+            const next = Number(h.newStock ?? 0);
+            const stockText = `${prev.toFixed(3)} → ${next.toFixed(3)}`;
             return [
               dateTime,
               getMovementLabel(h.type),
@@ -528,7 +522,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {filteredHistory.length > 0 ? (
-              filteredHistory.map((movement: StockRow) => (
+              filteredHistory.map((movement: any) => (
                 <div
                   key={movement.id}
                   className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
@@ -542,20 +536,20 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                         <span className="font-medium text-gray-900 dark:text-gray-100">
                           {getMovementLabel(movement.type)}
                         </span>
-                        <span className={`font-bold ${getMovementColor(toNum(movement.quantity))}`}>
-                          {toNum(movement.quantity) > 0 ? '+' : ''}
-                          {toNum(movement.quantity).toFixed(3)} {product.unit}
+                        <span className={`font-bold ${getMovementColor(Number(movement.quantity ?? 0))}`}>
+                          {(Number(movement.quantity ?? 0)) > 0 ? '+' : ''}
+                          {Number(movement.quantity ?? 0).toFixed(3)} {product.unit}
                         </span>
                       </div>
                       <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
                         <div className="flex items-center space-x-1">
                           <Calendar className="w-3 h-3" />
-                          <span>{new Date(movement.date as any).toLocaleDateString('fr-FR')}</span>
+                          <span>{new Date(movement.date).toLocaleDateString('fr-FR')}</span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
                           <span>
-                            {new Date(movement.date as any).toLocaleTimeString('fr-FR', {
+                            {new Date(movement.date).toLocaleTimeString('fr-FR', {
                               hour: '2-digit',
                               minute: '2-digit'
                             })}
@@ -606,6 +600,125 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
                   <div className="text-right">
                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {toNum(movement.previousStock).toFixed(3)} → {toNum(movement.newStock).toFixed(3)}
+                      {Number(movement.previousStock ?? 0).toFixed(3)} → {Number(movement.newStock ?? 0).toFixed(3)}
                     </div>
-                    <div className="text-xs text-gray-400
+                    <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-5 00 dark:text-gray-400">Aucun mouvement de stock</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                  L'historique apparaîtra après les premiers mouvements
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modal commande liée */}
+        {viewingOrder && (
+          <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Détails de la Commande</h3>
+                  <button
+                    onClick={() => setViewingOrder(null)}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                {(() => {
+                  const order = getOrderById(viewingOrder);
+                  if (!order) {
+                    return <div className="text-center py-8"><p className="text-gray-500 dark:text-gray-400">Commande non trouvée</p></div>;
+                  }
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Numéro de commande</p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{order.number}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Date</p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{new Date(order.orderDate).toLocaleDateString('fr-FR')}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Client</p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">
+                            {order.clientType === 'personne_physique' ? order.clientName : order.client?.name}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{Number(order.totalTTC || 0).toLocaleString()} MAD</p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Articles commandés</p>
+                        <div className="space-y-2">
+                          {order.items.map((item: any, index: number) => (
+                            <div
+                              key={index}
+                              className={`p-3 rounded-lg border ${
+                                item.productName === product.name
+                                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+                                  : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                              }`}
+                            >
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium text-gray-900 dark:text-gray-100">{item.productName}</span>
+                                <span className="text-sm text-gray-600 dark:text-gray-300">
+                                  {Number(item.quantity).toFixed(3)} × {Number(item.unitPrice).toFixed(2)} MAD = {Number(item.total).toFixed(2)} MAD
+                                </span>
+                              </div>
+                              {item.productName === product.name && (
+                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">← Ce produit dans cette commande</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3">
+                        <button
+                          onClick={() => setViewingOrder(null)}
+                          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          Fermer
+                        </button>
+                        <a
+                          href={`/commandes/${order.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>Voir commande complète</span>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end pt-6">
+          <button onClick={onClose} className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">
+            Fermer
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
