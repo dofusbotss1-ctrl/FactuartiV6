@@ -43,6 +43,8 @@ type HistoryRow = {
   __source?: 'stockMovements' | 'synthetic' | 'initial';
 };
 
+type ViewOrderRef = { id?: string; number?: string; details?: any };
+
 export default function StockHistoryModal({ isOpen, onClose, product }: StockHistoryModalProps) {
   const dataCtx: any = useData();
   const stockMovements = dataCtx.stockMovements as any[];
@@ -54,8 +56,8 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const [filterType, setFilterType] = useState<'all' | 'orders' | 'adjustments' | 'initial'>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [viewingOrder, setViewingOrder] = useState<string | null>(null);
 
+  const [viewingOrder, setViewingOrder] = useState<ViewOrderRef | null>(null); // <-- changed
   const [toDelete, setToDelete] = useState<HistoryRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -232,7 +234,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
         item.newStock = running;
       }
     });
-    // retour en DESC (plus récent en haut)
     return asc.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
@@ -274,13 +275,12 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     return true;
   };
 
-  /** IMPORTANT: plus récent en haut, **stock initial toujours en bas** */
   const displayHistory = useMemo(() => {
     const base = history.filter(m => inPeriod(m.date) && inRange(m.date) && typeOK(m.type));
-    base.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // desc
+    base.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const initials = base.filter(m => m.type === 'initial');
     const others = base.filter(m => m.type !== 'initial');
-    return [...others, ...initials]; // initial à la fin
+    return [...others, ...initials];
   }, [history, selectedPeriod, startDate, endDate, filterType]);
 
   const getMovementIcon = (type: string) => {
@@ -302,7 +302,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     }
   };
   const getMovementColor = (q: number) => (q > 0 ? 'text-green-600' : q < 0 ? 'text-red-600' : 'text-gray-600');
-  const handleViewOrder = (orderId: string) => setViewingOrder(orderId);
 
   const loadImageAsDataURL = (url: string): Promise<string> =>
     new Promise((resolve) => {
@@ -330,14 +329,8 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
 
     const companyName = user?.company?.name || '';
     const logoUrl = (user?.company as any)?.logo || (user?.company as any)?.logoUrl || '';
-    if (companyName) {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
-      doc.setTextColor(15, 23, 42); doc.text(companyName, lrMargin, y);
-    }
-    if (logoUrl) {
-      const dataUrl = await loadImageAsDataURL(logoUrl);
-      if (dataUrl) doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - 70, 76, 70, 70, undefined, 'FAST');
-    }
+    if (companyName) { doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(15, 23, 42); doc.text(companyName, lrMargin, y); }
+    if (logoUrl) { const dataUrl = await loadImageAsDataURL(logoUrl); if (dataUrl) doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - 70, 76, 70, 70, undefined, 'FAST'); }
 
     doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.setTextColor(15, 23, 42);
     doc.text('Historique du Stock', pageWidth / 2, y, { align: 'center' }); y += 20;
@@ -364,7 +357,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     doc.setTextColor(15, 23, 42); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
     doc.text('Mouvements', lrMargin, y); y += 8;
 
-    // Utiliser displayHistory (DESC + initial en bas)
     const body: RowInput[] =
       displayHistory.length === 0
         ? [['—', '—', '—', '—', '—', '—']]
@@ -377,7 +369,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             let clientText = '—';
             if (h.orderDetails?.clientName) clientText = String(h.orderDetails.clientName);
             else if (h.orderId) {
-              const od = getOrderById(h.orderId);
+              const od = getOrderById(String(h.orderId));
               if (od) clientText = od.clientType === 'personne_physique' ? (od.clientName || '—') : (od.client?.name || '—');
             }
             return [dateTime, getMovementLabel(h.type), qtyText, stockText, clientText, h.reference || ''];
@@ -410,7 +402,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Historique du Stock" size="xl">
       <div className="space-y-6">
-        {/* En-tête & résumé */}
+        {/* Header & résumé */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-700">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
@@ -462,7 +454,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
             </div>
 
             <div>
-              <label className="block text sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type de mouvement</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type de mouvement</label>
               <select value={filterType} onChange={e => setFilterType(e.target.value as any)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                 <option value="all">Tous</option>
                 <option value="orders">Commandes</option>
@@ -490,7 +482,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Liste mouvements (desc, initial en bas) */}
+        {/* Liste mouvements */}
         <div className="max-h-96 overflow-y-auto">
           <div className="space-y-3">
             {displayHistory.length > 0 ? (
@@ -514,8 +506,18 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                         {movement.reference && (<div className="flex items-center space-x-1"><span className="font-mono text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">{movement.reference}</span></div>)}
                       </div>
 
-                      {movement.orderId && (
-                        <button onClick={() => handleViewOrder(movement.orderId!)} className="mt-1 inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors" title="Voir la commande">
+                      {(movement.orderId || movement.orderDetails?.orderNumber || movement.reference) && (
+                        <button
+                          onClick={() =>
+                            setViewingOrder({
+                              id: movement.orderId ? String(movement.orderId) : undefined,
+                              number: movement.orderDetails?.orderNumber || movement.reference || undefined,
+                              details: movement.orderDetails
+                            })
+                          }
+                          className="mt-1 inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                          title="Voir la commande"
+                        >
                           <ExternalLink className="w-3 h-3" />
                           <span>Commande</span>
                         </button>
@@ -530,7 +532,6 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
                       </div>
                       <div className="text-xs text-gray-400 dark:text-gray-500">Stock après mouvement</div>
                     </div>
-
                     {movement.__source === 'stockMovements' && (
                       <button onClick={() => setToDelete(movement)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors" title="Supprimer ce mouvement">
                         <Trash2 className="w-5 h-5" />
@@ -549,28 +550,78 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
           </div>
         </div>
 
-        {/* Modal commande liée */}
-        {viewingOrder && (
-          <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
+        {/* Détails commande (robuste: id → number → fallback details) */}
+        <AnimatePresence>
+          {viewingOrder && (
+            <motion.div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto" initial={{ scale: 0.95, y: 12, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.95, y: 12, opacity: 0 }}>
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Détails de la Commande</h3>
                   <button onClick={() => setViewingOrder(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
                     <X className="w-5 h-5 text-gray-500" />
                   </button>
                 </div>
-              </div>
-              <div className="p-6">
-                {(() => {
-                  const order = getOrderById(viewingOrder);
-                  if (!order) return <div className="text-center py-8"><p className="text-gray-500 dark:text-gray-400">Commande non trouvée</p></div>;
-                  return <div className="space-y-4">{/* détails si besoin */}</div>;
-                })()}
-              </div>
-            </div>
-          </div>
-        )}
+                <div className="p-6">
+                  {(() => {
+                    const byId = viewingOrder.id ? getOrderById(String(viewingOrder.id)) : null;
+                    const byNumber = (!byId && viewingOrder.number) ? orders.find((o: any) => String(o.number) === String(viewingOrder.number)) : null;
+                    const order: any = byId || byNumber || null;
+
+                    const number = order?.number || viewingOrder.number || '—';
+                    const clientName = order
+                      ? (order.clientType === 'personne_physique' ? order.clientName : order.client?.name)
+                      : (viewingOrder.details?.clientName || '—');
+
+                    const orderDate = order?.orderDate || viewingOrder.details?.orderDate || null;
+                    const totalTTC = order?.totalTTC ?? viewingOrder.details?.orderTotal ?? null;
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Numéro de commande</p>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">{number}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Date</p>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">{orderDate ? new Date(orderDate).toLocaleDateString('fr-FR') : '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Client</p>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">{clientName}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
+                            <p className="font-medium text-gray-900 dark:text-gray-100">
+                              {totalTTC != null ? Number(totalTTC).toLocaleString() + ' MAD' : '—'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end space-x-3">
+                          <button onClick={() => setViewingOrder(null)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                            Fermer
+                          </button>
+                          {order?.id ? (
+                            <a href={`/commandes/${order.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                              <ExternalLink className="w-4 h-4" />
+                              <span>Voir la commande</span>
+                            </a>
+                          ) : viewingOrder.number ? (
+                            <a href={`/commandes?search=${encodeURIComponent(String(viewingOrder.number))}`} className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
+                              <ExternalLink className="w-4 h-4" />
+                              <span>Aller aux commandes</span>
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Confirm delete */}
         <AnimatePresence>
