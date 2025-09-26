@@ -287,7 +287,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
   const exportStockPDF = async () => {
     const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
-    const lrMargin = 40;
+    const lrMargin = 5;
     const usableWidth = pageWidth - lrMargin * 2;
     let y = 36;
 
@@ -305,7 +305,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
       if (dataUrl) {
         const imgW = 50;
         const imgH = 50;
-        doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - imgW, imgH + 6, imgW, imgH, undefined, 'FAST');
+        doc.addImage(dataUrl, 'PNG', pageWidth - lrMargin - imgW , imgH + 6, imgW, imgH, undefined, 'FAST');
       }
     }
 
