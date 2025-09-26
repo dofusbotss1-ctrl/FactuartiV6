@@ -295,7 +295,7 @@ export default function StockHistoryModal({ isOpen, onClose, product }: StockHis
     const logoUrl = (user?.company as any)?.logo || (user?.company as any)?.logoUrl || '';
     if (companyName) {
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
+      doc.setFontSize(16);
       doc.setTextColor(15, 23, 42);
       doc.text(companyName, lrMargin, y);
     }
