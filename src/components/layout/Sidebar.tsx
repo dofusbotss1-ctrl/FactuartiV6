@@ -213,13 +213,13 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
             >
               <img
                 src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
-                alt="Facturati Logo"
+                alt="Factourati Logo"
                 className="w-8 h-8 object-contain"
               />
             </motion.div>
             {open && (
               <div>
-                <h1 className="text-lg font-bold text-gray-900 dark:text-white">Facturati</h1>
+                <h1 className="text-lg font-bold text-gray-900 dark:text-white">Factourati</h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400">ERP Morocco (V.1.25.6)</p>
               </div>
             )}
