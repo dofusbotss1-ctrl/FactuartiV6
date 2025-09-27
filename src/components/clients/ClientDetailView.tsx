@@ -124,7 +124,7 @@ export default function ClientDetailView({ clientId, onBack }: Props) {
                           </span>
                           {/* Aller vers la liste des factures avec focus */}
                           <Link
-                            to={`/factures?focus=${linkedInvoice.id}`}
+                            to={`/invoices?focus=${linkedInvoice.id}`}
                             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                             title="Voir la facture dans la liste"
                           >
