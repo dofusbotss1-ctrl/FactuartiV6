@@ -1,10 +1,49 @@
+<!-- /index.html  (mise à jour SEO & mobile-friendly) -->
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=1024, initial-scale=0.3, maximum-scale=1.0, user-scalable=yes" />
-    <title>Facturati - Solution ERP Marocaine</title>
+    <!-- Viewport: corrige le rendu mobile (éviter width=1024 / initial-scale=0.3) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Factourati — Solution ERP Marocaine (Devis, Factures, Stock, Projets)</title>
+
+    <!-- Robots: autoriser l'indexation -->
+    <meta name="robots" content="index, follow" />
+    <meta name="googlebot" content="index, follow" />
+
+    <!-- Description: utile pour l’extrait -->
+    <meta name="description" content="Factourati est un ERP marocain simple et conforme qui centralise devis, factures, paiements, stock, fournisseurs, projets et RH. Essai gratuit 1 mois." />
+
+    <!-- Canonical: unifier www vs non-www (ici on choisit www) -->
+    <link rel="canonical" href="https://www.factourati.com/" />
+
+    <!-- Open Graph / Twitter (non bloquant SEO, utile pour partage) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.factourati.com/" />
+    <meta property="og:title" content="Factourati — ERP Maroc (Devis, Factures, Stock, Projets)" />
+    <meta property="og:description" content="Gérez votre entreprise plus vite, plus simplement. Essai gratuit 1 mois." />
+    <meta property="og:image" content="https://www.factourati.com/og-cover.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- JSON-LD: Organisation (optionnel, améliore la compréhension) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Factourati",
+      "url": "https://www.factourati.com/",
+      "logo": "https://www.factourati.com/logo.png",
+      "contactPoint": [{
+        "@type": "ContactPoint",
+        "contactType": "customer support",
+        "email": "contact@factourati.ma",
+        "telephone": "+212666736446",
+        "areaServed": "MA"
+      }]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
