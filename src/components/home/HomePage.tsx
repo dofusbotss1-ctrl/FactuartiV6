@@ -64,13 +64,13 @@ export default function HomePage() {
               <div className="w-10 h-10 bg-gradient-to-br from-black-200 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
                 <img
                   src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
-                  alt="Facturati Logo"
+                  alt="Factourati Logo"
                   className="w-10 h-10 object-contain"
                 />
               </div>
 
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Facturati</h1>
+                <h1 className="text-xl font-bold text-gray-900">Factourati</h1>
                 <p className="text-xs text-gray-500">ERP Morocco</p>
               </div>
             </div>
@@ -131,17 +131,17 @@ export default function HomePage() {
               </motion.div>
 
               <motion.h1 variants={fadeUp} className="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-6 leading-tight">
-                Facturati — <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">Gérez votre entreprise plus vite, plus simplement</span>
+                Factourati — <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">Gérez votre entreprise plus vite, plus simplement</span>
               </motion.h1>
 
               <motion.p variants={fadeUp} className="text-lg sm:text-xl text-gray-700 mb-6">
                 Ne perdez plus de temps avec des fichiers éparpillés et des calculs compliqués.
-                Avec Facturati, vous centralisez <strong>devis</strong>, <strong>factures</strong>, <strong>paiements</strong>, <strong>stock</strong>, <strong>fournisseurs</strong>, <strong>projets</strong> et <strong>équipe</strong> dans une seule plateforme intelligente.
+                Avec Factourati, vous centralisez <strong>devis</strong>, <strong>factures</strong>, <strong>paiements</strong>, <strong>stock</strong>, <strong>fournisseurs</strong>, <strong>projets</strong> et <strong>équipe</strong> dans une seule plateforme intelligente.
               </motion.p>
 
               <motion.div variants={fadeUp} className="space-y-3 text-gray-800">
-                <div className="flex items-start gap-3"><span>✨</span><p><strong>Pourquoi choisir Facturati ?</strong></p></div>
-                <div className="flex items-start gap-3"><span>📑</span><p><strong>Facturation</strong> : créez et envoyez vos devis & factures en quelques clics.</p></div>
+                <div className="flex items-start gap-3"><span>✨</span><p><strong>Pourquoi choisir Factourati ?</strong></p></div>
+                <div className="flex items-start gap-3"><span>📑</span><p><strong>Factouration</strong> : créez et envoyez vos devis & factures en quelques clics.</p></div>
                 <div className="flex items-start gap-3"><span>📊</span><p><strong>Tableau de bord intelligent</strong> : suivez vos ventes, dépenses, paiements reçus et impayés en temps réel.</p></div>
                 <div className="flex items-start gap-3"><span>💡</span><p><strong>Factuee.ma : Plus qu’un logiciel</strong> : un partenaire de croissance — clair, rapide, 100 % conforme au Maroc.</p></div>
               </motion.div>
@@ -177,7 +177,7 @@ export default function HomePage() {
                       <div className="w-10 h-10 bg-gradient-to-br rounded-lg">
                         <img
                           src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
-                          alt="Facturati Logo"
+                          alt="Factourati Logo"
                           className="w-10 h-10 object-contain"
                         />
                       </div>
@@ -227,7 +227,7 @@ export default function HomePage() {
                 variants={fadeUp}
                 className="inline-block bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-1 rounded-md font-bold tracking-wider"
               >
-                Facturati
+                Factourati
               </motion.span>
               <motion.h2 variants={fadeUp} className="mt-4 text-3xl sm:text-4xl font-extrabold text-gray-900">
                 UNE PLATEFORME QUI S’ADAPTE À VOTRE SECTEUR D’ACTIVITÉ
@@ -300,12 +300,12 @@ export default function HomePage() {
                 </ul>
               </motion.div>
 
-              {/* Facturation */}
+              {/* Factouration */}
               <motion.div variants={fadeUp} whileHover={{ y: -4, scale: 1.02 }} className="bg-white p-6 rounded-xl border border-gray-200 hover:shadow-lg">
                 <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg flex items-center justify-center mb-4">
                   <FileText className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">Facturation</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Factouration</h3>
                 <ul className="space-y-2 text-gray-700 text-sm">
                   <li className="flex items-start gap-2"><Check className="w-4 h-4 mt-0.5 text-teal-600" /> Mentions légales Maroc (ICE, IF, RC, TVA) gérées.</li>
                   <li className="flex items-start gap-2"><Download className="w-4 h-4 mt-0.5 text-teal-600" /> PDF bilingue FR/AR, envoi & archivage.</li>
@@ -524,13 +524,13 @@ export default function HomePage() {
                 Ils nous font confiance
               </motion.h2>
               <motion.p variants={fadeUp} className="text-lg text-gray-600">
-                +1000 entreprises marocaines utilisent Facturati
+                +1000 entreprises marocaines utilisent Factourati
               </motion.p>
             </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                { name: 'Ahmed Bennani', company: 'Électronique Casa', text: 'Facturati a révolutionné ma gestion. +2h gagnées chaque jour !', rating: 5 },
+                { name: 'Ahmed Bennani', company: 'Électronique Casa', text: 'Factourati a révolutionné ma gestion. +2h gagnées chaque jour !', rating: 5 },
                 { name: 'Fatima El Alami', company: 'Boutique Mode Rabat', text: 'Simple, rapide et conforme à la loi marocaine. Parfait pour PME.', rating: 5 },
                 { name: 'Omar Tazi', company: 'Restaurant Le Jardin', text: 'Le suivi de stock m’évite les ruptures. Mes clients sont ravis.', rating: 5 }
               ].map((t, idx) => (
@@ -595,7 +595,7 @@ export default function HomePage() {
                 { q: "L’essai gratuit dure combien de temps ?", a: "Vous avez 1 mois gratuit, sans carte bancaire et sans engagement." },
                 { q: "Puis-je annuler à tout moment ?", a: "Oui. Vous pouvez annuler l’abonnement en un clic depuis votre espace." },
                 { q: "Mes données sont-elles sécurisées ?", a: "Oui. Hébergement au Maroc, sauvegardes régulières et chiffrement TLS/at-rest." },
-                { q: "Facturati est-il conforme à la loi marocaine ?", a: "Oui. Toutes les mentions obligatoires (ICE, IF, RC, TVA) sont intégrées." }
+                { q: "Factourati est-il conforme à la loi marocaine ?", a: "Oui. Toutes les mentions obligatoires (ICE, IF, RC, TVA) sont intégrées." }
               ].map((f, i) => (
                 <motion.details
                   key={i}
@@ -637,12 +637,12 @@ export default function HomePage() {
                 <div className="w-8 h-8 bg-gradient-to-br from-black-200 to-red-600  rounded-lg flex items-center justify-center shadow-lg">
                   <img
                     src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
-                    alt="Facturati Logo"
+                    alt="Factourati Logo"
                     className="w-8 h-8 object-contain"
                   />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">Facturati</h3>
+                  <h3 className="text-xl font-bold">Factourati</h3>
                   <p className="text-sm text-gray-400">ERP Morocco</p>
                 </div>
               </div>
@@ -656,7 +656,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center space-x-2 text-gray-400">
                   <Mail className="w-4 h-4" />
-                  <span>contact@facturati.ma</span>
+                  <span>contact@Factourati.ma</span>
                 </div>
               </div>
             </div>
@@ -683,7 +683,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Mail className="w-4 h-4" />
-                  <span>contact@facturati.ma</span>
+                  <span>contact@Factourati.ma</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Phone className="w-4 h-4" />
@@ -694,7 +694,7 @@ export default function HomePage() {
           </div>
 
           <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
-            <p>&copy; {new Date().getFullYear()} Facturati. Tous droits réservés. Made in Morocco 🇲🇦</p>
+            <p>&copy; {new Date().getFullYear()} Factourati. Tous droits réservés. Made in Morocco 🇲🇦</p>
           </div>
         </div>
       </footer>
