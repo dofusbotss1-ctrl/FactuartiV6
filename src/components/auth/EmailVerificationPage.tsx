@@ -109,7 +109,7 @@ export default function EmailVerificationPage() {
           <div className="px-6 sm:px-8 py-6 bg-gradient-to-r from-teal-600 to-blue-600 text-white">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-white/10 grid place-items-center shadow-inner">
-                <img src={LOGO} alt="Facturati" className="w-9 h-9 object-contain" />
+                <img src={LOGO} alt="Factourati" className="w-9 h-9 object-contain" />
               </div>
               <div>
                 <h1 className="text-xl font-bold">Vérification d’email</h1>
