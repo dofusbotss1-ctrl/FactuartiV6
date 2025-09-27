@@ -94,7 +94,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 /** Base URL pour la redirection après vérif email */
 const BASE_URL =
   import.meta.env.VITE_PUBLIC_BASE_URL ||
-  'https://www.factourati.com/';
+  'https://factuartiv6-ukge.bolt.host';
+
 
 const getActionCodeSettings = (): ActionCodeSettings => ({
   url: `${BASE_URL}/verify-email-success?mode=verifyEmail`,
@@ -256,7 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      if (email === 'admin@factourati.ma' && password === 'Rahma1211?') {
+      if (email === 'admin@facturati.ma' && password === 'Rahma1211?') {
         setUser({
           id: 'facture-admin',
           name: 'Administrateur Facturati',
@@ -274,7 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone: '+212 522 123 456',
             email: 'admin@facturati.ma',
             patente: 'ADMIN',
-            website: 'https://www.factourati.com/',
+            website: 'https://facturati.ma',
             subscription: 'pro',
             subscriptionDate: new Date().toISOString(),
             expiryDate: new Date(2030, 11, 31).toISOString()
