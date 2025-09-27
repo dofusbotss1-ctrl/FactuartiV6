@@ -258,10 +258,10 @@ export default function WelcomeProModal({ isOpen, onClose, expiryDate }: Welcome
                   <div className="grid grid-cols-1 sm:grid-cols-5 gap-6">
                     <div className="sm:col-span-3">
                       <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                        Accédez à toute la puissance de Facturati
+                        Accédez à toute la puissance de Factourati
                       </h4>
                       <p className="text-gray-700 dark:text-gray-300">
-                        Facturation illimitée, analyses avancées, support prioritaire, et plus encore.
+                        Factouration illimitée, analyses avancées, support prioritaire, et plus encore.
                       </p>
 
                       {/* Liste d’avantages */}
