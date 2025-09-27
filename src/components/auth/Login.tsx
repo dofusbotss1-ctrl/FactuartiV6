@@ -113,13 +113,13 @@ export default function Login() {
             <div className="w-16 h-16 bg-gradient-to-br from-black-200 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
               <img
                 src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
-                alt="Facturati Logo"
+                alt="Factourati Logo"
                 className="w-15 h-15 object-contain"
               />
             </div>
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            {t('Bienvenue sur Facturati')}
+            {t('Bienvenue sur Factourati')}
           </h2>
           <p className="text-gray-600">{t('loginSubtitle')}</p>
 
@@ -409,7 +409,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
               <ol className="text-sm text-blue-800 space-y-1 text-left">
                 <li>1. Ouvrez votre boîte email</li>
                 <li>2. Cliquez sur le lien de vérification</li>
-                <li>3. Revenez sur Facturati pour vous connecter</li>
+                <li>3. Revenez sur Factourati pour vous connecter</li>
               </ol>
             </div>
 
@@ -442,13 +442,13 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
             <div className="w-16 h-16 bg-gradient-to-br from-black-200 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
               <img
                 src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
-                alt="Facturati Logo"
+                alt="Factourati Logo"
                 className="w-15 h-15 object-contain"
               />
             </div>
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Créer votre compte</h2>
-          <p className="text-gray-600">Rejoignez Facturati et simplifiez votre gestion</p>
+          <p className="text-gray-600">Rejoignez Factourati et simplifiez votre gestion</p>
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit} noValidate>
