@@ -256,7 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      if (email === 'admin@facturati.ma' && password === 'Rahma1211?') {
+      if (email === 'admin@factourati.ma' && password === 'Rahma1211?') {
         setUser({
           id: 'facture-admin',
           name: 'Administrateur Facturati',
@@ -274,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone: '+212 522 123 456',
             email: 'admin@facturati.ma',
             patente: 'ADMIN',
-            website: 'https://facturati.ma',
+            website: 'https://www.factourati.com/,
             subscription: 'pro',
             subscriptionDate: new Date().toISOString(),
             expiryDate: new Date(2030, 11, 31).toISOString()
