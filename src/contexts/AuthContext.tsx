@@ -274,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             phone: '+212 522 123 456',
             email: 'admin@facturati.ma',
             patente: 'ADMIN',
-            website: 'https://www.factourati.com/,
+            website: 'https://www.factourati.com/',
             subscription: 'pro',
             subscriptionDate: new Date().toISOString(),
             expiryDate: new Date(2030, 11, 31).toISOString()
