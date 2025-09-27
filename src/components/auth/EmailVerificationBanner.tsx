@@ -9,7 +9,7 @@ export default function EmailVerificationBanner() {
   const [emailSent, setEmailSent] = useState(false);
 
   // Ne pas afficher si l'email est déjà vérifié ou si l'utilisateur n'est pas connecté via Firebase
-  if (!firebaseUser || firebaseUser.emailVerified || !isVisible || user?.email === 'admin@facturati.ma') {
+  if (!firebaseUser || firebaseUser.emailVerified || !isVisible || user?.email === 'admin@Factourati.ma') {
     return null;
   }
 
