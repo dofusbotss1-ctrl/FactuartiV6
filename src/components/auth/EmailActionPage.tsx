@@ -110,7 +110,7 @@ export default function EmailActionPage() {
           <div className="w-16 h-16 rounded-xl bg-white shadow-lg grid place-items-center">
             <img
               src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
-              alt="Facturati"
+              alt="Factourati"
               className="w-12 h-12 object-contain"
             />
           </div>
