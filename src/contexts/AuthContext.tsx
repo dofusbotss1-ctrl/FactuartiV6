@@ -94,7 +94,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 /** Base URL pour la redirection après vérif email */
 const BASE_URL =
   import.meta.env.VITE_PUBLIC_BASE_URL ||
-  'https://factuartiv6-ukge.bolt.host';
+  'https://www.factourati.com/';
 
 
 const getActionCodeSettings = (): ActionCodeSettings => ({
