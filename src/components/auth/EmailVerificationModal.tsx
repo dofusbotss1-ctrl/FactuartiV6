@@ -109,7 +109,7 @@ export default function EmailVerificationModal({ isOpen, onClose }: EmailVerific
               <ol className="text-sm text-blue-800 space-y-1">
                 <li>1. Vérifiez votre boîte email (et les spams)</li>
                 <li>2. Cliquez sur le lien de vérification</li>
-                <li>3. Revenez sur Facturati</li>
+                <li>3. Revenez sur Factourati</li>
                 <li>4. Votre compte sera automatiquement activé</li>
               </ol>
             </div>
