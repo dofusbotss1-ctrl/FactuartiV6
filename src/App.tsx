@@ -1,15 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { DataProvider } from './contexts/DataContext';
-import { LicenseProvider, useLicense } from './contexts/LicenseContext';
+import { LicenseProvider } from './contexts/LicenseContext';
 import { UserManagementProvider } from './contexts/UserManagementContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { StockProvider } from './contexts/StockContext';
 import { OrderProvider } from './contexts/OrderContext';
-import { SupplierProvider } from './contexts/SupplierContext';
-
 import ExpirationNotification from './components/auth/ExpirationNotification';
 import ExpiredAccountModal from './components/auth/ExpiredAccountModal';
 import EmailVerificationBanner from './components/auth/EmailVerificationBanner';
@@ -32,6 +31,7 @@ import LicenseAlert from './components/license/LicenseAlert';
 import UpgradePage from './components/license/UpgradePage';
 import ExpiryAlert from './components/license/ExpiryAlert';
 import ProUpgradeSuccess from './components/license/ProUpgradeSuccess';
+import { useLicense } from './contexts/LicenseContext';
 import AdminDashboard from './components/admin/AdminDashboard';
 import StockManagement from './components/stock/StockManagement';
 import HRManagement from './components/hr/HRManagement';
@@ -44,27 +44,16 @@ import CreateOrder from './components/orders/CreateOrder';
 import OrderDetail from './components/orders/OrderDetail';
 import EditOrder from './components/orders/EditOrder';
 import EmailVerificationPage from './components/auth/EmailVerificationPage';
+import EmailVerificationSuccessPage from './components/auth/EmailVerificationSuccessPage';
 import EmailActionPage from './components/auth/EmailActionPage';
 
-/* --- Hook utilitaire: savoir si on est en ≥ lg (1024px) --- */
-function useMediaQuery(query: string) {
-  const get = () => (typeof window !== 'undefined') && window.matchMedia(query).matches;
-  const [matches, setMatches] = useState<boolean>(get());
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const handler = () => setMatches(mql.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, [query]);
-  return matches;
-}
+import { SupplierProvider } from './contexts/SupplierContext';
+
 
 function AppContent() {
   const { user, isAuthenticated, showExpiryAlert, setShowExpiryAlert, expiredDate, subscriptionStatus } = useAuth();
   const { showSuccessModal, setShowSuccessModal, upgradeExpiryDate } = useLicense();
-
-  const isLg = useMediaQuery('(min-width:1024px)');
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => (typeof window !== 'undefined') ? window.matchMedia('(min-width:1024px)').matches : true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showUpgradePage, setShowUpgradePage] = useState(false);
   const [showExpirationNotification, setShowExpirationNotification] = useState(false);
   const [showExpiredModal, setShowExpiredModal] = useState(false);
@@ -73,23 +62,23 @@ function AppContent() {
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  /* Pourquoi: synchroniser l'état par défaut avec le breakpoint */
-  useEffect(() => { setSidebarOpen(isLg); }, [isLg]);
-
-  /* Pourquoi: éviter que la page scrolle sous le drawer mobile */
+  // Gérer les notifications d'expiration
   useEffect(() => {
-    const html = document.documentElement;
-    if (!isLg && sidebarOpen) html.style.overflow = 'hidden';
-    else html.style.overflow = '';
-  }, [isLg, sidebarOpen]);
-
-  useEffect(() => {
-    if (subscriptionStatus.shouldShowNotification) setShowExpirationNotification(true);
-    if (subscriptionStatus.isExpired && user?.isAdmin) setShowExpiredModal(true);
+    if (subscriptionStatus.shouldShowNotification) {
+      setShowExpirationNotification(true);
+    }
+    
+    if (subscriptionStatus.isExpired && user?.isAdmin) {
+      setShowExpiredModal(true);
+    }
+    
+    // Bloquer les utilisateurs non-admin si l'abonnement de l'entreprise a expiré
     if (user && !user.isAdmin && user.email !== 'admin@facturati.ma') {
-      const isCompanyProExpired = user.company.subscription !== 'pro' ||
+      const isCompanyProExpired = user.company.subscription !== 'pro' || 
         (user.company.expiryDate && new Date(user.company.expiryDate) < new Date());
-      if (isCompanyProExpired) setShowBlockedUserModal(true);
+      if (isCompanyProExpired) {
+        setShowBlockedUserModal(true);
+      }
     }
   }, [subscriptionStatus, user]);
 
@@ -101,17 +90,25 @@ function AppContent() {
 
   const handleDismissNotification = () => {
     setShowExpirationNotification(false);
+    // Masquer pour 24h
     localStorage.setItem('dismissedExpirationNotification', new Date().toISOString());
   };
 
+  // Vérifier si la notification a été masquée récemment
   useEffect(() => {
     const dismissed = localStorage.getItem('dismissedExpirationNotification');
     if (dismissed) {
-      const hoursDiff = (Date.now() - new Date(dismissed).getTime()) / 36e5;
-      if (hoursDiff < 24) setShowExpirationNotification(false);
+      const dismissedDate = new Date(dismissed);
+      const now = new Date();
+      const hoursDiff = (now.getTime() - dismissedDate.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursDiff < 24) {
+        setShowExpirationNotification(false);
+      }
     }
   }, []);
 
+  // Gestion des raccourcis clavier
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -121,27 +118,28 @@ function AppContent() {
       if (e.key === 'Escape') {
         setShowGlobalSearch(false);
         setShowNotifications(false);
-        if (!isLg) setSidebarOpen(false);
       }
     };
+
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isLg]);
-
+  }, []);
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/verify-email" element={<EmailVerificationPage />} />
-          <Route path="/verify-email-success" element={<EmailActionPage />} />
+            <Route path="/verify-email" element={<EmailVerificationPage />} /> {/* ⬅️ ajouté */}
+        <Route path="/verify-email-success" element={<EmailActionPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     );
   }
 
+  
+  // Si c'est l'admin de facture.ma, afficher le dashboard admin
   if (user?.email === 'admin@facturati.ma') {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -153,137 +151,124 @@ function AppContent() {
       </div>
     );
   }
-
   return (
     <>
+      {/* Bannière de vérification d'email - FIXE AU-DESSUS DE TOUT */}
       <EmailVerificationBanner />
-
-      {/* Layout global */}
-      <div className="relative min-h-screen bg-gray-50 dark:bg-gray-900 lg:flex overflow-x-hidden">
-        <LicenseAlert onUpgrade={() => setShowUpgradePage(true)} />
-
-        {/* --- SIDEBAR: drawer mobile + colonne desktop --- */}
-        <div
-          className={
-            // Pourquoi: drawer mobile (fixed + translate), colonne en ≥lg avec largeur 64/16
-            `fixed inset-y-0 left-0 z-40 w-64 transform bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800
-             transition-transform duration-200 ease-out
-             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-             lg:static lg:translate-x-0 ${sidebarOpen ? 'lg:w-64' : 'lg:w-16'}`
-          }
-        >
-          <Sidebar
-            open={sidebarOpen}
-            setOpen={setSidebarOpen}
-            onUpgrade={() => setShowUpgradePage(true)}
-          />
-        </div>
-
-        {/* Overlay mobile pour fermer le drawer */}
-        {!isLg && sidebarOpen && (
-          <button
-            aria-label="Fermer le menu"
-            onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-          />
-        )}
-
-        {/* --- CONTENU --- */}
-        <div
-          className={
-            // Pourquoi: marge gauche seulement en desktop pour laisser la place à la sidebar
-            `flex-1 w-full transition-[margin] duration-200
-             ${sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'}`
-          }
-        >
-          <Header
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            onOpenSearch={() => setShowGlobalSearch(true)}
-            onOpenNotifications={() => setShowNotifications(true)}
-          />
-
-          <main className="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900 min-h-screen max-w-screen-xl mx-auto">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/invoices" element={<InvoicesList />} />
-              <Route path="/invoices/create" element={<CreateInvoice />} />
-              <Route path="/quotes" element={<QuotesList />} />
-              <Route path="/quotes/create" element={<CreateQuote />} />
-              <Route path="/clients" element={<ClientsList />} />
-              <Route path="/products" element={<ProductsList />} />
-              <Route path="/suppliers" element={<SuppliersSection />} />
-              <Route path="/stock-management" element={<StockManagement />} />
-              <Route path="/supplier-management" element={<SupplierManagement />} />
-              <Route path="/hr-management" element={<HRManagement />} />
-              <Route path="/project-management" element={<ProjectManagement />} />
-              <Route path="/account-management" element={<AccountManagement />} />
-              <Route path="/commandes" element={<OrdersList />} />
-              <Route path="/commandes/nouveau" element={<CreateOrder />} />
-              <Route path="/commandes/:id" element={<OrderDetail />} />
-              <Route path="/commandes/:id/modifier" element={<EditOrder />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
-          </main>
-        </div>
-
-        {/* UI annexes */}
-        {showExpirationNotification && subscriptionStatus.shouldShowNotification && (
-          <ExpirationNotification
-            daysRemaining={subscriptionStatus.daysRemaining}
-            onRenew={handleRenewSubscription}
-            onDismiss={handleDismissNotification}
-          />
-        )}
-
-        <GlobalSearch isOpen={showGlobalSearch} onClose={() => setShowGlobalSearch(false)} />
-        <NotificationCenter isOpen={showNotifications} onClose={() => setShowNotifications(false)} />
-
-        {showUpgradePage && (
-          <UpgradePage
-            onClose={() => { setShowUpgradePage(false); setIsRenewalFlow(false); }}
-            isRenewal={isRenewalFlow}
-          />
-        )}
-
-        {showExpiryAlert && expiredDate && (
-          <ExpiryAlert
-            isOpen={showExpiryAlert}
-            onRenew={() => { setShowExpiryAlert(false); setIsRenewalFlow(true); setShowUpgradePage(true); }}
-            onLater={() => setShowExpiryAlert(false)}
-            expiryDate={expiredDate}
-          />
-        )}
-
-        {showSuccessModal && upgradeExpiryDate && (
-          <ProUpgradeSuccess
-            isOpen={showSuccessModal}
-            onClose={() => setShowSuccessModal(false)}
-            expiryDate={upgradeExpiryDate}
-          />
-        )}
-
-        {subscriptionStatus.isExpired && user?.isAdmin && (
-          <ExpiredAccountModal
-            isOpen={!!subscriptionStatus.isExpired}
-            onClose={() => {}}
-            isAdmin={true}
-            expiryDate={subscriptionStatus.expiryDate || ''}
-          />
-        )}
-
-        {showBlockedUserModal && user && !user.isAdmin && (
-          <ExpiredAccountModal
-            isOpen={showBlockedUserModal}
-            onClose={() => setShowBlockedUserModal(false)}
-            isAdmin={false}
-            expiryDate={user.company.expiryDate || ''}
-          />
-        )}
+      
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+      <LicenseAlert onUpgrade={() => setShowUpgradePage(true)} />
+      <Sidebar 
+        open={sidebarOpen} 
+        setOpen={setSidebarOpen} 
+        onUpgrade={() => setShowUpgradePage(true)} 
+      />
+      <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'} ${sidebarOpen ? 'ml-0' : 'ml-0'}`}>
+        <Header 
+          sidebarOpen={sidebarOpen} 
+          setSidebarOpen={setSidebarOpen}
+          onOpenSearch={() => setShowGlobalSearch(true)}
+          onOpenNotifications={() => setShowNotifications(true)}
+        />
+        <main className="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900 min-h-screen max-w-screen-xl mx-auto">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/invoices" element={<InvoicesList />} />
+            <Route path="/invoices/create" element={<CreateInvoice />} />
+            <Route path="/quotes" element={<QuotesList />} />
+            <Route path="/quotes/create" element={<CreateQuote />} />
+            <Route path="/clients" element={<ClientsList />} />
+            <Route path="/products" element={<ProductsList />} />
+            <Route path="/suppliers" element={<SuppliersSection />} />
+            <Route path="/stock-management" element={<StockManagement />} />
+            <Route path="/supplier-management" element={<SupplierManagement />} />
+            <Route path="/hr-management" element={<HRManagement />} />
+            <Route path="/project-management" element={<ProjectManagement />} />
+            <Route path="/account-management" element={<AccountManagement />} />
+            <Route path="/commandes" element={<OrdersList />} />
+            <Route path="/commandes/nouveau" element={<CreateOrder />} />
+            <Route path="/commandes/:id" element={<OrderDetail />} />
+            <Route path="/commandes/:id/modifier" element={<EditOrder />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </main>
       </div>
+      
+      {/* Notification d'expiration proche - EN BAS À DROITE */}
+      {showExpirationNotification && subscriptionStatus.shouldShowNotification && (
+        <ExpirationNotification
+          daysRemaining={subscriptionStatus.daysRemaining}
+          onRenew={handleRenewSubscription}
+          onDismiss={handleDismissNotification}
+        />
+      )}
+      
+      {/* Recherche globale */}
+      <GlobalSearch 
+        isOpen={showGlobalSearch}
+        onClose={() => setShowGlobalSearch(false)}
+      />
+
+      {/* Centre de notifications */}
+      <NotificationCenter 
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+      />
+      
+      {showUpgradePage && (
+        <UpgradePage 
+          onClose={() => {
+            setShowUpgradePage(false);
+            setIsRenewalFlow(false);
+          }} 
+          isRenewal={isRenewalFlow}
+        />
+      )}
+      
+      {showExpiryAlert && expiredDate && (
+        <ExpiryAlert
+          isOpen={showExpiryAlert}
+          onRenew={() => {
+            setShowExpiryAlert(false);
+            setIsRenewalFlow(true);
+            setShowUpgradePage(true);
+          }}
+          onLater={() => setShowExpiryAlert(false)}
+          expiryDate={expiredDate}
+        />
+      )}
+      
+      {showSuccessModal && upgradeExpiryDate && (
+        <ProUpgradeSuccess
+          isOpen={showSuccessModal}
+          onClose={() => setShowSuccessModal(false)}
+          expiryDate={upgradeExpiryDate}
+        />
+      )}
+      
+      {/* Modal d'abonnement expiré pour admin */}
+      {showExpiredModal && subscriptionStatus.isExpired && user?.isAdmin && (
+        <ExpiredAccountModal
+          isOpen={showExpiredModal}
+          onClose={() => setShowExpiredModal(false)}
+          isAdmin={true}
+          expiryDate={subscriptionStatus.expiryDate || ''}
+        />
+      )}
+      
+      {/* Modal de blocage pour utilisateurs non-admin */}
+      {showBlockedUserModal && user && !user.isAdmin && (
+        <ExpiredAccountModal
+          isOpen={showBlockedUserModal}
+          onClose={() => setShowBlockedUserModal(false)}
+          isAdmin={false}
+          expiryDate={user.company.expiryDate || ''}
+        />
+      )}
+    </div>
     </>
   );
 }
@@ -292,23 +277,23 @@ function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <LanguageProvider>
-          <AuthProvider>
-            <UserManagementProvider>
-              <OrderProvider>
-                <StockProvider>
-                  <SupplierProvider>
-                    <DataProvider>
-                      <LicenseProvider>
-                        <AppContent />
-                      </LicenseProvider>
-                    </DataProvider>
-                  </SupplierProvider>
-                </StockProvider>
-              </OrderProvider>
-            </UserManagementProvider>
-          </AuthProvider>
-        </LanguageProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <UserManagementProvider>
+            <OrderProvider>
+              <StockProvider>
+                <SupplierProvider>
+                  <DataProvider>
+                    <LicenseProvider>
+                      <AppContent />
+                    </LicenseProvider>
+                  </DataProvider>
+                </SupplierProvider>
+              </StockProvider>
+            </OrderProvider>
+          </UserManagementProvider>
+        </AuthProvider>
+      </LanguageProvider>
       </ThemeProvider>
     </BrowserRouter>
   );
