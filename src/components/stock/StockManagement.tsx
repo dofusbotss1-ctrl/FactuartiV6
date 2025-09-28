@@ -13,7 +13,7 @@ import MarginChart from './charts/MarginChart';
 import MonthlySalesChart from './charts/MonthlySalesChart';
 import SalesHeatmap from './charts/SalesHeatmap';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas'; // requis par jsPDF.html
+import html2canvas from 'html2canvas';
 
 export default function StockManagement() {
   const { user } = useAuth();
@@ -26,9 +26,9 @@ export default function StockManagement() {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [activeTab, setActiveTab] = useState<'overview' | 'evolution' | 'margins' | 'heatmap'>('overview');
 
-  const reportRef = useRef<HTMLDivElement>(null); // nœud source du PDF
+  const reportRef = useRef<HTMLDivElement>(null); // source PDF
 
-  // PRO
+  // PRO gate
   const isProActive =
     user?.company.subscription === 'pro' &&
     user?.company.expiryDate &&
@@ -54,7 +54,7 @@ export default function StockManagement() {
     );
   }
 
-  // Utils data
+  // ---- Data helpers (inchangé, mais propres) ----
   const generateStockEvolutionData = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return [];
@@ -81,7 +81,7 @@ export default function StockManagement() {
   const getDetailedProductData = () => {
     return products.map(product => {
       let quantitySold = 0, salesValue = 0;
-      const ids = new Set<string>();
+      const orderIds = new Set<string>();
       orders.forEach(o => {
         if (o.status === 'livre') {
           let has = false;
@@ -92,13 +92,13 @@ export default function StockManagement() {
               has = true;
             }
           });
-          if (has) ids.add(o.id);
+          if (has) orderIds.add(o.id);
         }
       });
       const remainingStock = product.stock - quantitySold;
       const purchaseValue = product.stock * product.purchasePrice;
-      const margin = salesValue - (quantitySold * product.purchasePrice);
-      return { ...product, quantitySold, salesValue, ordersCount: ids.size, remainingStock, purchaseValue, margin };
+      const margin = salesValue - quantitySold * product.purchasePrice;
+      return { ...product, quantitySold, salesValue, ordersCount: orderIds.size, remainingStock, purchaseValue, margin };
     }).filter(p => selectedProduct === 'all' || p.id === selectedProduct);
   };
   const detailedData = getDetailedProductData();
@@ -106,35 +106,38 @@ export default function StockManagement() {
   const generateDonutData = (type: 'sales' | 'stock') => {
     const colors = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1', '#84CC16', '#F97316', '#14B8A6'];
     if (type === 'sales') {
-      const salesByProduct = products.map(p => {
+      const byProduct = products.map(p => {
         const v = orders.reduce((sum, o) => {
           if (o.status === 'livre') {
             return sum + o.items.filter(i => i.productName === p.name).reduce((s, i) => s + i.total, 0);
-          } return sum;
+          }
+          return sum;
         }, 0);
         return { product: p.name, value: v };
       }).filter(x => x.value > 0);
-      const total = salesByProduct.reduce((s, x) => s + x.value, 0);
-      return salesByProduct.map((x, i) => ({ label: x.product, value: x.value, color: colors[i % colors.length], percentage: total ? (x.value / total) * 100 : 0 }));
+      const total = byProduct.reduce((s, x) => s + x.value, 0);
+      return byProduct.map((x, i) => ({ label: x.product, value: x.value, color: colors[i % colors.length], percentage: total ? (x.value / total) * 100 : 0 }));
     }
-    const stockByProduct = products.map(p => {
+    const stockBy = products.map(p => {
       const soldQty = orders.reduce((sum, o) => {
         if (o.status === 'livre') {
           return sum + o.items.filter(i => i.productName === p.name).reduce((s, i) => s + i.quantity, 0);
-        } return sum;
+        }
+        return sum;
       }, 0);
       const remaining = Math.max(0, p.stock - soldQty);
       return { product: p.name, value: remaining * p.purchasePrice };
     }).filter(x => x.value > 0);
-    const total = stockByProduct.reduce((s, x) => s + x.value, 0);
-    return stockByProduct.map((x, i) => ({ label: x.product, value: x.value, color: colors[i % colors.length], percentage: total ? (x.value / total) * 100 : 0 }));
+    const total = stockBy.reduce((s, x) => s + x.value, 0);
+    return stockBy.map((x, i) => ({ label: x.product, value: x.value, color: colors[i % colors.length], percentage: total ? (x.value / total) * 100 : 0 }));
   };
 
   const generateMarginData = () => products.map(p => {
     const s = orders.reduce((acc, o) => {
       if (o.status === 'livre') {
         o.items.forEach(i => { if (i.productName === p.name) { acc.quantity += i.quantity; acc.value += i.total; } });
-      } return acc;
+      }
+      return acc;
     }, { quantity: 0, value: 0 });
     const purchaseValue = s.quantity * p.purchasePrice;
     return { productName: p.name, margin: s.value - purchaseValue, salesValue: s.value, purchaseValue, unit: p.unit || 'unité' };
@@ -154,7 +157,9 @@ export default function StockManagement() {
           if (selectedProduct === 'all' || it.productName === products.find(p => p.id === selectedProduct)?.name) {
             acc.quantity += it.quantity; acc.value += it.total;
           }
-        }); acc.ordersCount += 1; return acc;
+        });
+        acc.ordersCount += 1;
+        return acc;
       }, { quantity: 0, value: 0, ordersCount: 0 });
       out.push({ month: label, ...m });
     }
@@ -226,43 +231,67 @@ export default function StockManagement() {
     { id: 'heatmap', label: 'Heatmap', icon: Activity }
   ] as const;
 
+  // --- Export PDF (fix: PAS d'opacité; fallback canvas si besoin) ---
+  const doHtml2CanvasFallback = async (el: HTMLElement, filename: string) => {
+    const a4pt = { w: 595.28, h: 841.89 }; // jsPDF A4 pts
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+    const img = canvas.toDataURL('image/jpeg', 0.98);
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+    const imgW = a4pt.w, imgH = (canvas.height * imgW) / canvas.width;
+    let y = 0;
+    pdf.addImage(img, 'JPEG', 0, y, imgW, imgH, undefined, 'FAST');
+    // pagination si contenu > 1 page
+    let remaining = imgH - a4pt.h;
+    while (remaining > 0) {
+      pdf.addPage();
+      y = Math.min(remaining, imgH) - imgH; // déplacement vertical
+      pdf.addImage(img, 'JPEG', 0, y, imgW, imgH, undefined, 'FAST');
+      remaining -= a4pt.h;
+    }
+    pdf.save(filename);
+  };
+
   const handleExportPDF = async () => {
     const el = reportRef.current;
     if (!el) return;
-    // Pourquoi: laisser le layout se stabiliser (fonts/mesures) avant capture
-    await new Promise(r => setTimeout(r, 50));
-    const file = `Rapport_Stock_Avance_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
-
-    const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
-    // @ts-ignore - typings parfois stricts
-    await doc.html(el, {
-      margin: 20,
-      autoPaging: 'text',
-      html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false },
-      windowWidth: el.scrollWidth, // Pourquoi: meilleur scaling
-      callback: (pdf: jsPDF) => pdf.save(file)
-    });
+    // IMPORTANT: élément visible (pas d'opacity/visibility). On le met juste hors-écran.
+    await new Promise(r => setTimeout(r, 100)); // laisser le layout se stabiliser
+    const filename = `Rapport_Stock_Avance_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
+    try {
+      const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+      // @ts-ignore
+      await doc.html(el, {
+        margin: 20,
+        autoPaging: 'text',
+        html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false },
+        windowWidth: el.scrollWidth,
+        callback: (pdf: jsPDF) => pdf.save(filename)
+      });
+    } catch (e) {
+      console.warn('jsPDF.html failed, fallback to html2canvas', e);
+      await doHtml2CanvasFallback(el, filename);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* === Rapport caché pour PDF (source de capture) === */}
+      {/* ====== SOURCE PDF (VISIBLE mais HORS-ÉCRAN — PAS d’opacité !) ====== */}
       <div
         ref={reportRef}
         style={{
-          position: 'fixed', // Pourquoi: garantit la peinture même hors-écran
-          left: -10000, top: 0, width: 794, // ~A4 @96dpi
-          background: '#fff', padding: 20, zIndex: 1, pointerEvents: 'none', opacity: 0.01
+          position: 'absolute', // pourquoi: le garder dans le flux de rendu
+          left: -99999, top: 0, width: 794, // ~ A4 @96dpi
+          background: '#fff', padding: 20, zIndex: 1, // pas d'opacité/visibility
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: 24, borderBottom: '2px solid #8B5CF6', paddingBottom: 12 }}>
           <h1 style={{ fontSize: 22, color: '#8B5CF6', margin: 0, fontWeight: 700 }}>RAPPORT DE GESTION DE STOCK AVANCÉ</h1>
           <h2 style={{ fontSize: 16, margin: '6px 0', fontWeight: 700 }}>{user?.company?.name || ''}</h2>
-          <p style={{ fontSize: 12, color: '#555', margin: 0 }}>Généré le {new Date().toLocaleDateString('fr-FR')}</p>
+          <p style={{ fontSize: 12, color: '#111', margin: 0 }}>Généré le {new Date().toLocaleDateString('fr-FR')}</p>
         </div>
 
-        <h3 style={{ fontSize: 14, margin: '0 0 8px', fontWeight: 700 }}>Statistiques Globales</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 12 }}>
+        <h3 style={{ fontSize: 14, margin: '0 0 8px', fontWeight: 700, color: '#111' }}>Statistiques Globales</h3>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 12, color: '#111' }}>
           <tbody>
             <tr><td style={{ border: '1px solid #e5e7eb', padding: 8 }}>Stock initial</td><td style={{ border: '1px solid #e5e7eb', padding: 8, fontWeight: 700 }}>{stats.totalStockInitial.toFixed(0)} {products[0]?.unit || ''}</td></tr>
             <tr><td style={{ border: '1px solid #e5e7eb', padding: 8 }}>Valeur d'achat</td><td style={{ border: '1px solid #e5e7eb', padding: 8, fontWeight: 700 }}>{stats.totalPurchaseValue.toLocaleString()} MAD</td></tr>
@@ -276,8 +305,8 @@ export default function StockManagement() {
           </tbody>
         </table>
 
-        <h3 style={{ fontSize: 14, margin: '16px 0 8px', fontWeight: 700 }}>Analyse détaillée par produit</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <h3 style={{ fontSize: 14, margin: '16px 0 8px', fontWeight: 700, color: '#111' }}>Analyse détaillée par produit</h3>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, color: '#111' }}>
           <thead>
             <tr>
               <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'left' }}>Produit</th>
@@ -306,7 +335,7 @@ export default function StockManagement() {
           </tbody>
         </table>
       </div>
-      {/* === /Rapport caché === */}
+      {/* ====== /SOURCE PDF ====== */}
 
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -401,16 +430,10 @@ export default function StockManagement() {
         </div>
       </div>
 
-      {/* Contenu */}
+      {/* Contenu (gardez vos sections/graphiques/tableaux comme avant) */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* ... (KPIs + cartes inchangés) ... */}
-            {/* Pour concision, garder votre bloc KPI existant ici */}
-          </div>
-
-          {/* Graphiques */}
+          {/* KPIs + Graphiques (votre code existant) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <DonutChart
               data={salesDonutData}
@@ -447,7 +470,6 @@ export default function StockManagement() {
       )}
 
       {activeTab === 'margins' && <MarginChart data={marginData} />}
-
       {activeTab === 'heatmap' && (
         <div className="space-y-6">
           <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
@@ -455,8 +477,114 @@ export default function StockManagement() {
         </div>
       )}
 
-      {/* Tableau détaillé (gardez votre version complète ici) */}
-      {/* ... */}
+     {/* Tableau détaillé */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Analyse Détaillée par Produit</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Produit</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stock Initial</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Qté Vendue</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stock Restant</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Valeur d'Achat</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Valeur de Vente</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Marge Brute</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {detailedData.map(product => (
+                <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{product.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{product.category}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {product.stock.toFixed(3)} {product.unit}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Min: {product.minStock.toFixed(3)} {product.unit}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {product.quantitySold.toFixed(3)} {product.unit}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {product.ordersCount} commande{product.ordersCount > 1 ? 's' : ''}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`text-sm font-medium ${
+                          product.remainingStock <= product.minStock ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'
+                        }`}
+                      >
+                        {product.remainingStock.toFixed(3)} {product.unit}
+                      </span>
+                      {product.remainingStock <= product.minStock && <AlertTriangle className="w-4 h-4 text-red-500" />}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {product.purchaseValue.toLocaleString()} MAD
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {product.salesValue.toLocaleString()} MAD
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <span className={`text-sm font-bold ${product.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {product.margin >= 0 ? '+' : ''}
+                        {product.margin.toLocaleString()} MAD
+                      </span>
+                      {product.margin >= 0 ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
+                    </div>
+                    {product.margin < 0 && (
+                      <div className="text-xs text-red-600 dark:text-red-400 mt-1">Besoin: +{Math.abs(product.margin).toLocaleString()} MAD</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {detailedData.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400">Aucun produit trouvé</p>
+          </div>
+        )}
+      </div>
+
+      {/* Indicateurs */}
+      {stats.grossMargin < 0 && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <XCircle className="w-8 h-8 text-red-600" />
+            <h3 className="text-lg font-semibold text-red-900 dark:text-red-100">⚠️ Performance Déficitaire</h3>
+          </div>
+          <p className="text-red-800 dark:text-red-200">
+            Votre marge brute est négative de <strong>{Math.abs(stats.grossMargin).toLocaleString()} MAD</strong>.
+          </p>
+        </div>
+      )}
+
+      {stats.grossMargin > 0 && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <CheckCircle className="w-8 h-8 text-green-600" />
+            <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">✅ Performance Positive</h3>
+          </div>
+          <p className="text-green-800 dark:text-green-200">
+            Excellente performance ! Votre marge brute est de <strong>+{stats.grossMargin.toLocaleString()} MAD</strong>.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
