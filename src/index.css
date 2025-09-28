@@ -1,72 +1,35 @@
+/* =========================
+   /src/index.css (remplacement)
+   ========================= */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Transitions globales pour le mode sombre */
-* {
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+/* Pourquoi: la transition globale sur * crée des lags sur mobile */
+html.theme-animate *, html.theme-animate *::before, html.theme-animate *::after {
+  transition: background-color .2s ease, border-color .2s ease, color .2s ease;
 }
 
-/* Amélioration des placeholders en mode sombre */
-.dark input::placeholder,
-.dark textarea::placeholder,
-.dark select::placeholder {
-  color: #9CA3AF;
-}
+/* Placeholders & focus (dark) */
+.dark input::placeholder, .dark textarea::placeholder, .dark select::placeholder { color: #9CA3AF; }
+.dark input:focus, .dark textarea:focus, .dark select:focus { box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
 
-/* Focus states améliorés pour le mode sombre */
-.dark input:focus,
-.dark textarea:focus,
-.dark select:focus {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
+/* Scrollbars (dark) */
+.dark ::-webkit-scrollbar { width: 8px; height: 8px; }
+.dark ::-webkit-scrollbar-track { background: #374151; }
+.dark ::-webkit-scrollbar-thumb { background: #6B7280; border-radius: 4px; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
-/* Scrollbars en mode sombre */
-.dark ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+/* Tooltips */
+@keyframes fadeIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+.animate-fade-in{animation:fadeIn .2s ease-out}
+.tooltip-arrow::before{content:'';position:absolute;top:-5px;left:20px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:5px solid white}
+.dark .tooltip-arrow::before{border-bottom-color:#374151}
 
-.dark ::-webkit-scrollbar-track {
-  background: #374151;
-}
+/* Fix mobiles: empêcher le scroll horizontal & médias fluides */
+html, body, #root { height: 100%; }
+body { overflow-x: hidden; } /* Pourquoi: évite les barres horizontales causées par la sidebar */
+img, svg, video, canvas { max-width: 100%; height: auto; display: block; }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: #6B7280;
-  border-radius: 4px;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #9CA3AF;
-}
-
-/* Animation pour les tooltips */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.2s ease-out;
-}
-
-/* Amélioration des tooltips */
-.tooltip-arrow::before {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 20px;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 5px solid white;
-}
-
-.dark .tooltip-arrow::before {
-  border-bottom-color: #374151;
-}
+/* (Optionnel) utilitaire pour safe area bas iOS */
+.pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
