@@ -40,7 +40,7 @@ export default function Dashboard() {
   const SUPPORT_ICON: 'message' | 'support' = 'message';
   const Glyph = SUPPORT_ICON === 'message' ? MessageCircle : LifeBuoy;
   const SUPPORT_PHONE_E164 = '212666736446';
-  const SUPPORT_EMAIL = 'support@facturati.ma';
+  const SUPPORT_EMAIL = 'contact@factourati.com';
 
   const [supportOpen, setSupportOpen] = React.useState(false);
   const [supportName, setSupportName] = React.useState<string>(user?.name || '');
@@ -58,7 +58,7 @@ export default function Dashboard() {
   };
 
   const buildContextText = () => [
-    '👋 Support Facturati',
+    '👋 Support Factourati',
     `Nom: ${supportName || '—'}`,
     `Email: ${user?.email || '—'}`,
     `Société: ${user?.company?.name || '—'}`,
@@ -68,7 +68,7 @@ export default function Dashboard() {
   ].join('\n');
 
   const sendEmail = () => {
-    const subject = encodeURIComponent('Support Facturati');
+    const subject = encodeURIComponent('Support Factourati');
     const body = encodeURIComponent(buildContextText());
     const mailto = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
     const ok = tryOpen(mailto);
@@ -93,7 +93,7 @@ export default function Dashboard() {
   };
 
   const getWelcomeMessage = () => {
-    if (user?.email === 'admin@facturati.ma') return `Bienvenue Administrateur Facturati ! Vous gérez la plateforme.`;
+    if (user?.email === 'admin@Factourati.ma') return `Bienvenue Administrateur Factourati ! Vous gérez la plateforme.`;
     if (user?.isAdmin) return `Bienvenue ${user.name} ! Vous êtes connecté en tant qu'administrateur.`;
     const permissionCount = user?.permissions ? Object.values(user.permissions).filter(Boolean).length : 0;
     return `Bienvenue ${user?.name} ! Vous avez accès à ${permissionCount} section${permissionCount > 1 ? 's' : ''} de l'entreprise ${user?.company?.name}.`;
