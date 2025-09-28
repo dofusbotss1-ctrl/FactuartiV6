@@ -28,7 +28,7 @@ export default function StockManagement() {
 
   const reportRef = useRef<HTMLDivElement>(null);
 
-  // ---- PRO gate ----
+  // PRO gate
   const isProActive =
     user?.company.subscription === 'pro' &&
     user?.company.expiryDate &&
@@ -41,20 +41,20 @@ export default function StockManagement() {
           <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
             <Crown className="w-10 h-10 text-white" />
           </div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">🔒 Fonctionnalité PRO</h2>
-        <p className="text-gray-600 dark:text-gray-300 mb-6">La Gestion de Stock est réservée aux abonnés PRO.</p>
-        <button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200">
-          <span className="flex items-center justify-center space-x-2">
-            <Crown className="w-5 h-5" />
-            <span>Passer à PRO - 299 MAD/mois</span>
-          </span>
-        </button>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">🔒 Fonctionnalité PRO</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">La Gestion de Stock est réservée aux abonnés PRO.</p>
+          <button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200">
+            <span className="flex items-center justify-center space-x-2">
+              <Crown className="w-5 h-5" />
+              <span>Passer à PRO - 299 MAD/mois</span>
+            </span>
+          </button>
         </div>
       </div>
     );
   }
 
-  // ---------- DATA HELPERS ----------
+  // -------------------- DATA --------------------
   const generateStockEvolutionData = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return [];
@@ -62,7 +62,7 @@ export default function StockManagement() {
     const out: { month: string; initialStock: number; sold: number; remaining: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const m = dt.getMonth(), y = dt.getFullYear();
+      const m = dt.getMonth(); const y = dt.getFullYear();
       const monthName = dt.toLocaleDateString('fr-FR', { month: 'short' });
       const sold = orders
         .filter(o => o.status === 'livre')
@@ -78,24 +78,32 @@ export default function StockManagement() {
   const getDetailedProductData = () => {
     return products.map(product => {
       let quantitySold = 0, salesValue = 0;
-      const ids = new Set<string>();
-      orders.forEach(o => {
-        if (o.status === 'livre') {
+      const ordersSet = new Set<string>();
+      orders.forEach(order => {
+        if (order.status === 'livre') {
           let has = false;
-          o.items.forEach(it => {
-            if (it.productName === product.name) {
-              quantitySold += it.quantity;
-              salesValue += it.total;
+          order.items.forEach(item => {
+            if (item.productName === product.name) {
+              quantitySold += item.quantity;
+              salesValue += item.total;
               has = true;
             }
           });
-          if (has) ids.add(o.id);
+          if (has) ordersSet.add(order.id);
         }
       });
       const remainingStock = product.stock - quantitySold;
       const purchaseValue = product.stock * product.purchasePrice;
       const margin = salesValue - quantitySold * product.purchasePrice;
-      return { ...product, quantitySold, salesValue, ordersCount: ids.size, remainingStock, purchaseValue, margin };
+      return {
+        ...product,
+        quantitySold,
+        salesValue,
+        ordersCount: ordersSet.size,
+        remainingStock,
+        purchaseValue,
+        margin
+      };
     }).filter(p => selectedProduct === 'all' || p.id === selectedProduct);
   };
   const detailedData = getDetailedProductData();
@@ -103,56 +111,70 @@ export default function StockManagement() {
   const generateDonutData = (type: 'sales' | 'stock') => {
     const colors = ['#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366F1', '#84CC16', '#F97316', '#14B8A6'];
     if (type === 'sales') {
-      const salesByProduct = products.map(p => {
-        const v = orders.reduce((sum, o) => {
-          if (o.status === 'livre') return sum + o.items.filter(i => i.productName === p.name).reduce((s, i) => s + i.total, 0);
+      const list = products.map(product => {
+        const totalSales = orders.reduce((sum, order) => {
+          if (order.status === 'livre') {
+            return sum + order.items
+              .filter(item => item.productName === product.name)
+              .reduce((s, item) => s + item.total, 0);
+          }
           return sum;
         }, 0);
-        return { product: p.name, value: v };
+        return { product: product.name, value: totalSales };
       }).filter(x => x.value > 0);
-      const total = salesByProduct.reduce((s, x) => s + x.value, 0);
-      return salesByProduct.map((x, i) => ({ label: x.product, value: x.value, color: colors[i % colors.length], percentage: total ? (x.value / total) * 100 : 0 }));
+      const total = list.reduce((s, x) => s + x.value, 0);
+      return list.map((x, i) => ({ label: x.product, value: x.value, color: colors[i % colors.length], percentage: total ? (x.value / total) * 100 : 0 }));
     }
-    const stockByProduct = products.map(p => {
-      const soldQty = orders.reduce((sum, o) => {
-        if (o.status === 'livre') return sum + o.items.filter(i => i.productName === p.name).reduce((s, i) => s + i.quantity, 0);
+    const list = products.map(product => {
+      const soldQ = orders.reduce((sum, order) => {
+        if (order.status === 'livre') {
+          return sum + order.items
+            .filter(item => item.productName === product.name)
+            .reduce((s, item) => s + item.quantity, 0);
+        }
         return sum;
       }, 0);
-      const remaining = Math.max(0, p.stock - soldQty);
-      return { product: p.name, value: remaining * p.purchasePrice };
+      const remaining = Math.max(0, product.stock - soldQ);
+      return { product: product.name, value: remaining * product.purchasePrice };
     }).filter(x => x.value > 0);
-    const total = stockByProduct.reduce((s, x) => s + x.value, 0);
-    return stockByProduct.map((x, i) => ({ label: x.product, value: x.value, color: colors[i % colors.length], percentage: total ? (x.value / total) * 100 : 0 }));
+    const total = list.reduce((s, x) => s + x.value, 0);
+    return list.map((x, i) => ({ label: x.product, value: x.value, color: colors[i % colors.length], percentage: total ? (x.value / total) * 100 : 0 }));
   };
 
-  const generateMarginData = () => products.map(p => {
-    const s = orders.reduce((acc, o) => {
-      if (o.status === 'livre') o.items.forEach(i => { if (i.productName === p.name) { acc.quantity += i.quantity; acc.value += i.total; } });
+  const generateMarginData = () => products.map(product => {
+    const s = orders.reduce((acc, order) => {
+      if (order.status === 'livre') {
+        order.items.forEach(item => {
+          if (item.productName === product.name) { acc.quantity += item.quantity; acc.value += item.total; }
+        });
+      }
       return acc;
     }, { quantity: 0, value: 0 });
-    const purchaseValue = s.quantity * p.purchasePrice;
-    return { productName: p.name, margin: s.value - purchaseValue, salesValue: s.value, purchaseValue, unit: p.unit || 'unité' };
+    const purchaseValue = s.quantity * product.purchasePrice;
+    return { productName: product.name, margin: s.value - purchaseValue, salesValue: s.value, purchaseValue, unit: product.unit || 'unité' };
   }).filter(x => x.salesValue > 0);
 
   const generateMonthlySalesData = () => {
-    const out: { month: string; quantity: number; value: number; ordersCount: number }[] = [];
+    const months: { month: string; quantity: number; value: number; ordersCount: number }[] = [];
     for (let i = 0; i < 12; i++) {
       const date = new Date(selectedYear, i, 1);
       const label = date.toLocaleDateString('fr-FR', { month: 'short' });
-      const monthOrders = orders.filter(o => {
-        const d = new Date(o.orderDate);
-        return d.getMonth() === i && d.getFullYear() === selectedYear && o.status === 'livre';
+      const monthOrders = orders.filter(order => {
+        const d = new Date(order.orderDate);
+        return d.getMonth() === i && d.getFullYear() === selectedYear && order.status === 'livre';
       });
-      const m = monthOrders.reduce((acc, o) => {
-        o.items.forEach(it => {
-          if (selectedProduct === 'all' || it.productName === products.find(p => p.id === selectedProduct)?.name) {
-            acc.quantity += it.quantity; acc.value += it.total;
+      const m = monthOrders.reduce((acc, order) => {
+        order.items.forEach(item => {
+          if (selectedProduct === 'all' || item.productName === products.find(p => p.id === selectedProduct)?.name) {
+            acc.quantity += item.quantity; acc.value += item.total;
           }
-        }); acc.ordersCount += 1; return acc;
+        });
+        acc.ordersCount += 1;
+        return acc;
       }, { quantity: 0, value: 0, ordersCount: 0 });
-      out.push({ month: label, ...m });
+      months.push({ month: label, ...m });
     }
-    return out;
+    return months;
   };
 
   const generateHeatmapData = () => {
@@ -183,15 +205,17 @@ export default function StockManagement() {
     let filtered = products;
     if (productFilter !== 'all') filtered = products.filter(p => p.id === productFilter);
     let totalStockInitial = 0, totalPurchaseValue = 0, totalSalesValue = 0, totalQuantitySold = 0, totalRemainingStock = 0, dormantProducts = 0;
-    filtered.forEach(p => {
-      totalStockInitial += p.stock;
-      totalPurchaseValue += p.stock * p.purchasePrice;
+    filtered.forEach(product => {
+      totalStockInitial += product.stock;
+      totalPurchaseValue += product.stock * product.purchasePrice;
       let q = 0, v = 0;
-      orders.forEach(o => {
-        if (o.status === 'livre') o.items.forEach(i => { if (i.productName === p.name) { q += i.quantity; v += i.total; } });
+      orders.forEach(order => {
+        if (order.status === 'livre') {
+          order.items.forEach(item => { if (item.productName === product.name) { q += item.quantity; v += item.total; } });
+        }
       });
       totalQuantitySold += q; totalSalesValue += v;
-      const remaining = p.stock - q; totalRemainingStock += remaining;
+      totalRemainingStock += product.stock - q;
       if (q === 0) dormantProducts++;
     });
     return {
@@ -218,25 +242,27 @@ export default function StockManagement() {
     { id: 'heatmap', label: 'Heatmap', icon: Activity }
   ] as const;
 
-  // ---------- EXPORT PDF : A4 précis + pagination ----------
+  // -------------------- EXPORT PDF --------------------
   const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
   async function withTemporarilyVisible<T>(el: HTMLElement, work: () => Promise<T>): Promise<T> {
-    const prev = { display: el.style.display, position: el.style.position, left: el.style.left, top: el.style.top, width: el.style.width, z: el.style.zIndex, bg: el.style.background, color: el.style.color };
-    // affichage réel dans le viewport (sinon canvas blanc)
+    const prev = {
+      display: el.style.display, position: el.style.position, left: el.style.left, top: el.style.top,
+      width: el.style.width, zIndex: el.style.zIndex, background: el.style.background, color: el.style.color
+    };
     el.style.display = 'block';
     el.style.position = 'fixed';
     el.style.left = '0';
     el.style.top = '0';
-    el.style.width = '794px'; // ~ A4 @96dpi
+    el.style.width = '794px'; // ~A4 @96dpi
     el.style.zIndex = '2147483647';
     el.style.background = '#ffffff';
     el.style.color = '#111111';
     try {
-      // fonts/layout
+      // attendre fonts/layout pour éviter blanc
       // @ts-ignore
       if (document.fonts && document.fonts.ready) { try { await (document.fonts as any).ready; } catch {} }
-      await wait(120);
+      await wait(160);
       return await work();
     } finally {
       el.style.display = prev.display;
@@ -244,46 +270,41 @@ export default function StockManagement() {
       el.style.left = prev.left;
       el.style.top = prev.top;
       el.style.width = prev.width;
-      el.style.zIndex = prev.z;
-      el.style.background = prev.bg;
+      el.style.zIndex = prev.zIndex;
+      el.style.background = prev.background;
       el.style.color = prev.color;
     }
   }
 
   async function exportPDFViaCanvas(el: HTMLElement, filename: string) {
-    const marginMM = 10;                 // marges
+    const marginMM = 10;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     const contentW = pageW - marginMM * 2;
     const contentH = pageH - marginMM * 2;
 
-    // capture haute résolution
     const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
     const imgPxW = canvas.width;
     const imgPxH = canvas.height;
 
-    // hauteur du "morceau" à copier par page en pixels:
-    const slicePxH = Math.floor((contentH * imgPxW) / contentW); // proportionnel
+    const slicePxH = Math.floor((contentH * imgPxW) / contentW);
     const pages = Math.max(1, Math.ceil(imgPxH / slicePxH));
 
     const pageCanvas = document.createElement('canvas');
-    const pageCtx = pageCanvas.getContext('2d')!;
+    const ctx = pageCanvas.getContext('2d')!;
     pageCanvas.width = imgPxW;
 
     for (let i = 0; i < pages; i++) {
       const sY = i * slicePxH;
       const sh = Math.min(slicePxH, imgPxH - sY);
       pageCanvas.height = sh;
-      pageCtx.clearRect(0, 0, imgPxW, sh);
-      // crucial: copier le morceau de l'image source
-      pageCtx.drawImage(canvas, 0, sY, imgPxW, sh, 0, 0, imgPxW, sh);
-
-      const imgData = pageCanvas.toDataURL('image/jpeg', 0.98);
-      const imgHMM = (sh * contentW) / imgPxW; // garder le ratio exact
-
+      ctx.clearRect(0, 0, imgPxW, sh);
+      ctx.drawImage(canvas, 0, sY, imgPxW, sh, 0, 0, imgPxW, sh);
+      const img = pageCanvas.toDataURL('image/jpeg', 0.98);
+      const imgHmm = (sh * contentW) / imgPxW;
       if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', marginMM, marginMM, contentW, imgHMM, undefined, 'FAST');
+      pdf.addImage(img, 'JPEG', marginMM, marginMM, contentW, imgHmm, undefined, 'FAST');
     }
 
     pdf.save(filename);
@@ -298,67 +319,151 @@ export default function StockManagement() {
     });
   };
 
+  // -------------------- UI + RAPPORT --------------------
   return (
     <div className="space-y-6">
-      {/* ====== RAPPORT (source PDF) ====== */}
+      {/* ===== Rapport imprimable (fond blanc) ===== */}
       <div
         ref={reportRef}
         style={{
           display: 'none',
-          // Styles d'impression internes pour un rendu stable
           fontFamily: 'Arial, ui-sans-serif, system-ui',
           fontSize: 12,
           lineHeight: 1.4,
-          color: '#111'
+          color: '#111',
+          padding: 0
         }}
       >
-        <div style={{ textAlign: 'center', marginBottom: 16, borderBottom: '2px solid #8B5CF6', paddingBottom: 8 }}>
-          <h1 style={{ fontSize: 20, color: '#8B5CF6', margin: 0, fontWeight: 700 }}>RAPPORT DE GESTION DE STOCK AVANCÉ</h1>
-          <h2 style={{ fontSize: 14, margin: '6px 0', fontWeight: 700, color: '#111' }}>{user?.company?.name || ''}</h2>
-          <p style={{ fontSize: 11, color: '#111', margin: 0 }}>Généré le {new Date().toLocaleDateString('fr-FR')}</p>
+        {/* En-tête */}
+        <div style={{ padding: 24, borderBottom: '2px solid #8B5CF6' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 22, color: '#8B5CF6', fontWeight: 800, marginBottom: 6 }}>RAPPORT DE GESTION DE STOCK AVANCÉ</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{user?.company?.name || ''}</div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>Généré le {new Date().toLocaleDateString('fr-FR')}</div>
+          </div>
         </div>
 
-        <h3 style={{ fontSize: 13, margin: '0 0 8px', fontWeight: 700, color: '#111' }}>Statistiques Globales</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 10 }}>
-          <tbody>
-            <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock initial</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.totalStockInitial.toFixed(0)} {products[0]?.unit || ''}</td></tr>
-            <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Valeur d'achat</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.totalPurchaseValue.toLocaleString()} MAD</td></tr>
-            <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Valeur de vente</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.totalSalesValue.toLocaleString()} MAD</td></tr>
-            <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Marge brute</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700, color: stats.grossMargin >= 0 ? '#059669' : '#DC2626' }}>{stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()} MAD</td></tr>
-            <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock restant</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.totalRemainingStock.toFixed(0)} {products[0]?.unit || ''}</td></tr>
-            <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Produits non vendus</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.dormantProducts}</td></tr>
-          </tbody>
-        </table>
+        {/* KPIs */}
+        <div style={{ padding: '16px 24px' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Statistiques Globales</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginBottom: 10 }}>
+            <tbody>
+              <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock initial</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.totalStockInitial.toFixed(0)} {products[0]?.unit || ''}</td></tr>
+              <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Valeur d'achat</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.totalPurchaseValue.toLocaleString()} MAD</td></tr>
+              <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Valeur de vente</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.totalSalesValue.toLocaleString()} MAD</td></tr>
+              <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Marge brute</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700, color: stats.grossMargin >= 0 ? '#059669' : '#DC2626' }}>{stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()} MAD</td></tr>
+              <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock restant</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.totalRemainingStock.toFixed(0)} {products[0]?.unit || ''}</td></tr>
+              <tr><td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Produits non vendus</td><td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>{stats.dormantProducts}</td></tr>
+            </tbody>
+          </table>
+        </div>
 
-        <h3 style={{ fontSize: 13, margin: '12px 0 6px', fontWeight: 700, color: '#111' }}>Analyse détaillée par produit</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
-          <thead>
-            <tr>
-              <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'left' }}>Produit</th>
-              <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Stock initial</th>
-              <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Qté vendue</th>
-              <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Stock restant</th>
-              <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Achat (MAD)</th>
-              <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Vente (MAD)</th>
-              <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Marge (MAD)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {getDetailedProductData().map(p => (
-              <tr key={p.id}>
-                <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>{p.name}</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.stock.toFixed(3)} {p.unit || ''}</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.quantitySold.toFixed(3)} {p.unit || ''}</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.remainingStock.toFixed(3)} {p.unit || ''}</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.purchaseValue.toLocaleString()}</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.salesValue.toLocaleString()}</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right', color: p.margin >= 0 ? '#059669' : '#DC2626' }}>{p.margin >= 0 ? '+' : ''}{p.margin.toLocaleString()}</td>
+        {/* Graphiques Donut */}
+        <div style={{ padding: '0 24px 12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Répartition des Ventes</div>
+              <div style={{ width: '100%', height: 260 }}>
+                <DonutChart
+                  data={salesDonutData}
+                  title=""
+                  subtitle=""
+                  centerValue={`${stats.totalSalesValue.toLocaleString()}`}
+                  centerLabel="MAD Total"
+                />
+              </div>
+            </div>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Valeur du Stock Restant</div>
+              <div style={{ width: '100%', height: 260 }}>
+                <DonutChart
+                  data={stockDonutData}
+                  title=""
+                  subtitle=""
+                  centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`}
+                  centerLabel="MAD Stock"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Marges */}
+        <div style={{ padding: '0 24px 12px' }}>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Marge Brute par Produit</div>
+            <div style={{ width: '100%', height: 260 }}>
+              <MarginChart data={marginData} />
+            </div>
+          </div>
+        </div>
+
+        {/* Ventes mensuelles + Heatmap */}
+        <div style={{ padding: '0 24px 12px', display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Ventes Mensuelles {selectedYear}</div>
+            <div style={{ width: '100%', height: 260 }}>
+              <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
+            </div>
+          </div>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Heatmap des Ventes</div>
+            <div style={{ width: '100%', height: 280 }}>
+              <SalesHeatmap data={heatmapData} products={products.map(p => p.name)} months={months} selectedYear={selectedYear} />
+            </div>
+          </div>
+        </div>
+
+        {/* Évolution du stock (si produit choisi) */}
+        {selectedProduct !== 'all' && (
+          <div style={{ padding: '0 24px 12px' }}>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Évolution du stock</div>
+              <div style={{ width: '100%', height: 260 }}>
+                <StockEvolutionChart
+                  data={generateStockEvolutionData(selectedProduct)}
+                  productName={products.find(p => p.id === selectedProduct)?.name || 'Produit'}
+                  unit={products.find(p => p.id === selectedProduct)?.unit || 'unité'}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tableau détaillé */}
+        <div style={{ padding: '0 24px 24px' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Analyse détaillée par produit</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
+            <thead>
+              <tr>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'left' }}>Produit</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Stock initial</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Qté vendue</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Stock restant</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Achat (MAD)</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Vente (MAD)</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Marge (MAD)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {detailedData.map(p => (
+                <tr key={p.id}>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>{p.name}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.stock.toFixed(3)} {p.unit || ''}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.quantitySold.toFixed(3)} {p.unit || ''}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.remainingStock.toFixed(3)} {p.unit || ''}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.purchaseValue.toLocaleString()}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.salesValue.toLocaleString()}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right', color: p.margin >= 0 ? '#059669' : '#DC2626' }}>
+                    {p.margin >= 0 ? '+' : ''}{p.margin.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      {/* ====== /RAPPORT ====== */}
+      {/* ===== /Rapport ===== */}
 
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -368,7 +473,9 @@ export default function StockManagement() {
             <span>Gestion de Stock Avancée</span>
             <Crown className="w-6 h-6 text-yellow-500" />
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-2">Analyse avancée + export PDF.</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-2">
+            Analyse avancée + export PDF avec graphiques intégrés.
+          </p>
         </div>
         <button
           onClick={handleExportPDF}
@@ -385,26 +492,37 @@ export default function StockManagement() {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Filtrer par produit</label>
             <select
-              value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)}
+              value={selectedProduct}
+              onChange={(e) => setSelectedProduct(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             >
               <option value="all">Tous les produits</option>
-              {products.map(p => (<option key={p.id} value={p.id}>{p.name} ({p.category})</option>))}
+              {products.map(product => (
+                <option key={product.id} value={product.id}>
+                  {product.name} ({product.category})
+                </option>
+              ))}
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Année d'analyse</label>
             <select
-              value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))}
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             >
-              {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Période d'analyse</label>
             <select
-              value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)}
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             >
               <option value="month">Mensuel</option>
@@ -412,6 +530,7 @@ export default function StockManagement() {
               <option value="year">Annuel</option>
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rechercher</label>
             <div className="relative">
@@ -419,7 +538,9 @@ export default function StockManagement() {
                 <Search className="h-4 w-4 text-gray-400 dark:text-gray-500" />
               </div>
               <input
-                type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 pr-4 py-2 w-full border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 placeholder="Rechercher..."
               />
@@ -453,11 +574,10 @@ export default function StockManagement() {
         </div>
       </div>
 
-      {/* Contenu (votre UI existante) */}
+      {/* Contenu (UI) */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* … vos cartes KPI complètes … */}
             {/* Stock Initial */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
@@ -470,7 +590,7 @@ export default function StockManagement() {
                 </div>
               </div>
             </div>
-            {/* Valeur d'achat */}
+            {/* Valeur d'Achat */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center">
@@ -482,7 +602,7 @@ export default function StockManagement() {
                 </div>
               </div>
             </div>
-            {/* Valeur de vente */}
+            {/* Valeur de Vente */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
@@ -494,21 +614,23 @@ export default function StockManagement() {
                 </div>
               </div>
             </div>
-            {/* Marge */}
+            {/* Marge Brute */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
                 <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stats.grossMargin >= 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-red-600'}`}>
                   {stats.grossMargin >= 0 ? <TrendingUp className="w-6 h-6 text-white" /> : <TrendingDown className="w-6 h-6 text-white" />}
                 </div>
                 <div>
-                  <p className={`text-2xl font-bold ${stats.grossMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()}</p>
+                  <p className={`text-2xl font-bold ${stats.grossMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()}
+                  </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Marge Brute (MAD)</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Graphiques */}
+          {/* Donuts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <DonutChart
               data={salesDonutData}
@@ -521,7 +643,7 @@ export default function StockManagement() {
               data={stockDonutData}
               title="Valeur du Stock Restant"
               subtitle="Par produit (valeur d'achat)"
-              centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`}
+              centerValue={`${stockDonutData.reduce((sum, i) => sum + i.value, 0).toLocaleString()}`}
               centerLabel="MAD Stock"
             />
           </div>
@@ -544,7 +666,7 @@ export default function StockManagement() {
         </div>
       )}
 
-      {activeTab === 'margins' && <MarginChart data={marginData} />}
+      {activeTab === 'margins' && (<MarginChart data={marginData} />)}
 
       {activeTab === 'heatmap' && (
         <div className="space-y-6">
@@ -553,8 +675,111 @@ export default function StockManagement() {
         </div>
       )}
 
-      {/* Tableau détaillé (inchangé) */}
-      {/* … votre table complète (comme dans votre version) … */}
+      {/* Tableau détaillé */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Analyse Détaillée par Produit</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Produit</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stock Initial</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Qté Vendue</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stock Restant</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Valeur d'Achat</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Valeur de Vente</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Marge Brute</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {detailedData.map(product => (
+                <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{product.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{product.category}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {product.stock.toFixed(3)} {product.unit}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Min: {product.minStock.toFixed(3)} {product.unit}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {product.quantitySold.toFixed(3)} {product.unit}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {product.ordersCount} commande{product.ordersCount > 1 ? 's' : ''}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <span className={`text-sm font-medium ${product.remainingStock <= product.minStock ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                        {product.remainingStock.toFixed(3)} {product.unit}
+                      </span>
+                      {product.remainingStock <= product.minStock && (<AlertTriangle className="w-4 h-4 text-red-500" />)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {product.purchaseValue.toLocaleString()} MAD
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {product.salesValue.toLocaleString()} MAD
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <span className={`text-sm font-bold ${product.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {product.margin >= 0 ? '+' : ''}{product.margin.toLocaleString()} MAD
+                      </span>
+                      {product.margin >= 0 ? (<CheckCircle className="w-4 h-4 text-green-500" />) : (<XCircle className="w-4 h-4 text-red-500" />)}
+                    </div>
+                    {product.margin < 0 && (
+                      <div className="text-xs text-red-600 dark:text-red-400 mt-1">Besoin: +{Math.abs(product.margin).toLocaleString()} MAD</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {detailedData.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400">Aucun produit trouvé</p>
+          </div>
+        )}
+      </div>
+
+      {/* Indicateurs globaux */}
+      {stats.grossMargin < 0 && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <XCircle className="w-8 h-8 text-red-600" />
+            <h3 className="text-lg font-semibold text-red-900 dark:text-red-100">⚠️ Performance Déficitaire</h3>
+          </div>
+          <p className="text-red-800 dark:text-red-200">
+            Votre marge brute est négative de <strong>{Math.abs(stats.grossMargin).toLocaleString()} MAD</strong>.
+          </p>
+        </div>
+      )}
+
+      {stats.grossMargin > 0 && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <CheckCircle className="w-8 h-8 text-green-600" />
+            <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">✅ Performance Positive</h3>
+          </div>
+          <p className="text-green-800 dark:text-green-200">
+            Excellente performance ! Marge brute : <strong>+{stats.grossMargin.toLocaleString()} MAD</strong>.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
