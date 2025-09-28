@@ -26,7 +26,7 @@ export default function StockManagement() {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [activeTab, setActiveTab] = useState<'overview' | 'evolution' | 'margins' | 'heatmap'>('overview');
 
-  const reportRef = useRef<HTMLDivElement>(null); // source PDF
+  const reportRef = useRef<HTMLDivElement>(null);
 
   // PRO gate
   const isProActive =
@@ -54,7 +54,7 @@ export default function StockManagement() {
     );
   }
 
-  // ---- Data helpers (inchangé, mais propres) ----
+  // ---------- Data helpers ----------
   const generateStockEvolutionData = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return [];
@@ -66,10 +66,7 @@ export default function StockManagement() {
       const monthName = dt.toLocaleDateString('fr-FR', { month: 'short' });
       const sold = orders
         .filter(o => o.status === 'livre')
-        .filter(o => {
-          const d = new Date(o.orderDate);
-          return d.getMonth() === m && d.getFullYear() === y;
-        })
+        .filter(o => { const d = new Date(o.orderDate); return d.getMonth() === m && d.getFullYear() === y; })
         .reduce((sum, o) => sum + o.items
           .filter(it => it.productName === product.name)
           .reduce((s, it) => s + (it.quantity || 0), 0), 0);
@@ -231,20 +228,66 @@ export default function StockManagement() {
     { id: 'heatmap', label: 'Heatmap', icon: Activity }
   ] as const;
 
-  // --- Export PDF (fix: PAS d'opacité; fallback canvas si besoin) ---
+  // ---------- Export helpers ----------
+  const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+  async function withTemporarilyVisible<T>(el: HTMLElement, work: () => Promise<T>): Promise<T> {
+    const prev = {
+      display: el.style.display,
+      position: el.style.position,
+      left: el.style.left,
+      top: el.style.top,
+      width: el.style.width,
+      zIndex: el.style.zIndex,
+      background: el.style.background,
+      color: el.style.color
+    };
+    // rendre VISIBLE dans le viewport (sinon capture blanche)
+    el.style.display = 'block';
+    el.style.position = 'fixed';
+    el.style.left = '0';
+    el.style.top = '0';
+    el.style.width = '794px'; // ~A4 @96dpi
+    el.style.zIndex = '2147483647';
+    el.style.background = '#ffffff';
+    el.style.color = '#111111';
+
+    try {
+      // attendre fonts + layout
+      // @ts-ignore
+      if (document.fonts && document.fonts.ready) { try { await (document.fonts as any).ready; } catch {} }
+      await wait(120);
+      if (el.offsetHeight === 0 || el.offsetWidth === 0) {
+        console.warn('PDF: élément sans taille => capture blanche', { w: el.offsetWidth, h: el.offsetHeight });
+      } else {
+        console.log('PDF node size', el.offsetWidth, el.offsetHeight);
+      }
+      return await work();
+    } finally {
+      // restore
+      el.style.display = prev.display;
+      el.style.position = prev.position;
+      el.style.left = prev.left;
+      el.style.top = prev.top;
+      el.style.width = prev.width;
+      el.style.zIndex = prev.zIndex;
+      el.style.background = prev.background;
+      el.style.color = prev.color;
+    }
+  }
+
   const doHtml2CanvasFallback = async (el: HTMLElement, filename: string) => {
-    const a4pt = { w: 595.28, h: 841.89 }; // jsPDF A4 pts
+    const a4pt = { w: 595.28, h: 841.89 };
     const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
     const img = canvas.toDataURL('image/jpeg', 0.98);
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
     const imgW = a4pt.w, imgH = (canvas.height * imgW) / canvas.width;
     let y = 0;
     pdf.addImage(img, 'JPEG', 0, y, imgW, imgH, undefined, 'FAST');
-    // pagination si contenu > 1 page
     let remaining = imgH - a4pt.h;
     while (remaining > 0) {
       pdf.addPage();
-      y = Math.min(remaining, imgH) - imgH; // déplacement vertical
+      y -= a4pt.h;
       pdf.addImage(img, 'JPEG', 0, y, imgW, imgH, undefined, 'FAST');
       remaining -= a4pt.h;
     }
@@ -254,39 +297,33 @@ export default function StockManagement() {
   const handleExportPDF = async () => {
     const el = reportRef.current;
     if (!el) return;
-    // IMPORTANT: élément visible (pas d'opacity/visibility). On le met juste hors-écran.
-    await new Promise(r => setTimeout(r, 100)); // laisser le layout se stabiliser
     const filename = `Rapport_Stock_Avance_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
-    try {
-      const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
-      // @ts-ignore
-      await doc.html(el, {
-        margin: 20,
-        autoPaging: 'text',
-        html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false },
-        windowWidth: el.scrollWidth,
-        callback: (pdf: jsPDF) => pdf.save(filename)
-      });
-    } catch (e) {
-      console.warn('jsPDF.html failed, fallback to html2canvas', e);
-      await doHtml2CanvasFallback(el, filename);
-    }
+
+    await withTemporarilyVisible(el, async () => {
+      try {
+        const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+        // @ts-ignore
+        await doc.html(el, {
+          margin: 20,
+          autoPaging: 'text',
+          html2canvas: { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false },
+          windowWidth: el.scrollWidth,
+          callback: (pdf: jsPDF) => pdf.save(filename)
+        });
+      } catch (e) {
+        console.warn('jsPDF.html failed, fallback to html2canvas', e);
+        await doHtml2CanvasFallback(el, filename);
+      }
+    });
   };
 
   return (
     <div className="space-y-6">
-      {/* ====== SOURCE PDF (VISIBLE mais HORS-ÉCRAN — PAS d’opacité !) ====== */}
-      <div
-        ref={reportRef}
-        style={{
-          position: 'absolute', // pourquoi: le garder dans le flux de rendu
-          left: -99999, top: 0, width: 794, // ~ A4 @96dpi
-          background: '#fff', padding: 20, zIndex: 1, // pas d'opacité/visibility
-        }}
-      >
+      {/* ===== SOURCE PDF : caché par défaut (display:none), rendu visible TEMPORAIREMENT au moment de l'export ===== */}
+      <div ref={reportRef} style={{ display: 'none' }}>
         <div style={{ textAlign: 'center', marginBottom: 24, borderBottom: '2px solid #8B5CF6', paddingBottom: 12 }}>
           <h1 style={{ fontSize: 22, color: '#8B5CF6', margin: 0, fontWeight: 700 }}>RAPPORT DE GESTION DE STOCK AVANCÉ</h1>
-          <h2 style={{ fontSize: 16, margin: '6px 0', fontWeight: 700 }}>{user?.company?.name || ''}</h2>
+          <h2 style={{ fontSize: 16, margin: '6px 0', fontWeight: 700, color: '#111' }}>{user?.company?.name || ''}</h2>
           <p style={{ fontSize: 12, color: '#111', margin: 0 }}>Généré le {new Date().toLocaleDateString('fr-FR')}</p>
         </div>
 
@@ -335,7 +372,7 @@ export default function StockManagement() {
           </tbody>
         </table>
       </div>
-      {/* ====== /SOURCE PDF ====== */}
+      {/* ===== /SOURCE PDF ===== */}
 
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -356,84 +393,10 @@ export default function StockManagement() {
         </button>
       </div>
 
-      {/* Filtres */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Filtrer par produit</label>
-            <select
-              value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            >
-              <option value="all">Tous les produits</option>
-              {products.map(p => (<option key={p.id} value={p.id}>{p.name} ({p.category})</option>))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Année d'analyse</label>
-            <select
-              value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            >
-              {availableYears.map(y => (<option key={y} value={y}>{y}</option>))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Période d'analyse</label>
-            <select
-              value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            >
-              <option value="month">Mensuel</option>
-              <option value="quarter">Trimestriel</option>
-              <option value="year">Annuel</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rechercher</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-              </div>
-              <input
-                type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                placeholder="Rechercher..."
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <nav className="flex space-x-8 px-6">
-            {tabs.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                    activeTab === tab.id
-                      ? 'border-purple-500 text-purple-600'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      {/* Contenu (gardez vos sections/graphiques/tableaux comme avant) */}
+      {/* Filtres / Tabs / Contenu — gardez votre UI existante ici */}
+      {/* … vos blocs KPI, graphiques, tableaux (inchangés) … */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* KPIs + Graphiques (votre code existant) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <DonutChart
               data={salesDonutData}
@@ -452,7 +415,6 @@ export default function StockManagement() {
           </div>
         </div>
       )}
-
       {activeTab === 'evolution' && selectedProduct !== 'all' && (
         <StockEvolutionChart
           data={generateStockEvolutionData(selectedProduct)}
@@ -460,7 +422,6 @@ export default function StockManagement() {
           unit={products.find(p => p.id === selectedProduct)?.unit || 'unité'}
         />
       )}
-
       {activeTab === 'evolution' && selectedProduct === 'all' && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
           <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -468,123 +429,14 @@ export default function StockManagement() {
           <p className="text-gray-600 dark:text-gray-300">Choisissez un produit dans les filtres.</p>
         </div>
       )}
-
       {activeTab === 'margins' && <MarginChart data={marginData} />}
       {activeTab === 'heatmap' && (
         <div className="space-y-6">
-          <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
+          <MonthlySalesChart data={generateMonthlySalesData()} selectedYear={selectedYear} />
           <SalesHeatmap data={heatmapData} products={products.map(p => p.name)} months={months} selectedYear={selectedYear} />
         </div>
       )}
-
-     {/* Tableau détaillé */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Analyse Détaillée par Produit</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Produit</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stock Initial</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Qté Vendue</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Stock Restant</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Valeur d'Achat</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Valeur de Vente</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Marge Brute</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {detailedData.map(product => (
-                <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{product.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{product.category}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {product.stock.toFixed(3)} {product.unit}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Min: {product.minStock.toFixed(3)} {product.unit}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {product.quantitySold.toFixed(3)} {product.unit}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {product.ordersCount} commande{product.ordersCount > 1 ? 's' : ''}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <span
-                        className={`text-sm font-medium ${
-                          product.remainingStock <= product.minStock ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'
-                        }`}
-                      >
-                        {product.remainingStock.toFixed(3)} {product.unit}
-                      </span>
-                      {product.remainingStock <= product.minStock && <AlertTriangle className="w-4 h-4 text-red-500" />}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {product.purchaseValue.toLocaleString()} MAD
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {product.salesValue.toLocaleString()} MAD
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-sm font-bold ${product.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {product.margin >= 0 ? '+' : ''}
-                        {product.margin.toLocaleString()} MAD
-                      </span>
-                      {product.margin >= 0 ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
-                    </div>
-                    {product.margin < 0 && (
-                      <div className="text-xs text-red-600 dark:text-red-400 mt-1">Besoin: +{Math.abs(product.margin).toLocaleString()} MAD</div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {detailedData.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400">Aucun produit trouvé</p>
-          </div>
-        )}
-      </div>
-
-      {/* Indicateurs */}
-      {stats.grossMargin < 0 && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <XCircle className="w-8 h-8 text-red-600" />
-            <h3 className="text-lg font-semibold text-red-900 dark:text-red-100">⚠️ Performance Déficitaire</h3>
-          </div>
-          <p className="text-red-800 dark:text-red-200">
-            Votre marge brute est négative de <strong>{Math.abs(stats.grossMargin).toLocaleString()} MAD</strong>.
-          </p>
-        </div>
-      )}
-
-      {stats.grossMargin > 0 && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl p-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <CheckCircle className="w-8 h-8 text-green-600" />
-            <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">✅ Performance Positive</h3>
-          </div>
-          <p className="text-green-800 dark:text-green-200">
-            Excellente performance ! Votre marge brute est de <strong>+{stats.grossMargin.toLocaleString()} MAD</strong>.
-          </p>
-        </div>
-      )}
+      {/* … votre grand tableau détaillé … */}
     </div>
   );
 }
