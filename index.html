@@ -1,32 +1,77 @@
-<!-- /index.html — favicon/logo d’onglet mis à jour -->
+<!-- /index.html -->
 <!doctype html>
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
 
-    <!-- Favicon: utilise directement TON logo hébergé -->
-    <!-- Pourquoi: remplacer /vite.svg par ton logo pour l’icône d’onglet -->
-    <link rel="icon" type="image/png"
-          href="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png?v=2" />
-    <link rel="apple-touch-icon"
-          href="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png?v=2" />
+    <!-- Favicon / PWA icons -->
+    <!-- Idéal: héberger le logo sur TON domaine (mieux pour Google) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="https://www.factourati.com/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="https://www.factourati.com/favicon-16.png">
+    <link rel="apple-touch-icon" href="https://www.factourati.com/apple-touch-icon.png">
 
+    <!-- Viewport: version SEO/mobile-friendly -->
     <meta name="viewport" content="width=1024, initial-scale=0.3, maximum-scale=1.0, user-scalable=yes" />
+
     <title>Factourati — Solution ERP Marocaine (Devis, Factures, Stock, Projets)</title>
+    <meta name="description" content="Factourati est un ERP marocain simple et conforme qui centralise devis, factures, paiements, stock, fournisseurs, projets et RH. Essai gratuit 1 mois.">
+    <link rel="canonical" href="https://www.factourati.com/">
 
-    <meta name="description" content="Factourati est un ERP marocain simple et conforme qui centralise devis, factures, paiements, stock, fournisseurs, projets et RH. Essai gratuit 1 mois." />
-    <link rel="canonical" href="https://www.factourati.com/" />
+    <!-- Open Graph / Twitter -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://www.factourati.com/">
+    <meta property="og:title" content="Factourati — ERP Maroc (Devis, Factures, Stock, Projets)">
+    <meta property="og:description" content="Gérez votre entreprise plus vite, plus simplement. Essai gratuit 1 mois.">
+    <meta property="og:image" content="https://www.factourati.com/og-cover.jpg">
+    <meta name="twitter:card" content="summary_large_image">
 
-    <meta property="og:type" content="website" />
-    <meta name="google-site-verification" content="QmkznMauU6MNK9zlJvPak_sAyAOvXH1nZzIs5BZfwu0" />
-    <meta property="og:url" content="https://www.factourati.com/" />
-    <meta property="og:title" content="Factourati — ERP Maroc (Devis, Factures, Stock, Projets)" />
-    <meta property="og:description" content="Gérez votre entreprise plus vite, plus simplement. Essai gratuit 1 mois." />
-    <meta property="og:image" content="https://www.factourati.com/og-cover.jpg" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <!-- Google site verification -->
+    <meta name="google-site-verification" content="QmkznMauU6MNK9zlJvPak_sAyAOvXH1nZzIs5BZfwu0">
 
-    <!-- JSON-LD -->
-   
+    <!-- JSON-LD: Organization (affichage du logo) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Factourati",
+      "url": "https://www.factourati.com",
+      "logo": "https://www.factourati.com/logo.png",
+      "image": "https://www.factourati.com/logo.png",
+      "sameAs": [
+        "https://www.facebook.com/Factourati",
+        "https://www.linkedin.com/company/factourati",
+        "https://www.instagram.com/factourati"
+      ]
+    }
+    </script>
+
+    <!-- JSON-LD: WebSite (sitelinks + recherche de site) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Factourati",
+      "url": "https://www.factourati.com",
+      "inLanguage": "fr-MA",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://www.factourati.com/recherche?q={query}",
+        "query-input": "required name=query"
+      }
+    }
+    </script>
+
+    <!-- JSON-LD: WebPage (page d'accueil) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Factourati — Solution ERP Marocaine",
+      "url": "https://www.factourati.com/",
+      "description": "ERP marocain pour devis, factures, paiements, stock, fournisseurs, projets et RH.",
+      "isPartOf": { "@type": "WebSite", "url": "https://www.factourati.com" }
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
