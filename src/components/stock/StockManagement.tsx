@@ -15,6 +15,7 @@ import SalesHeatmap from './charts/SalesHeatmap';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+// --- types souples (contexte projet) ---
 type OrderItem = { productName: string; quantity: number; total: number };
 type Order = { id: string; orderDate: string; status: string; items: OrderItem[] };
 type Product = {
@@ -36,9 +37,10 @@ export default function StockManagement() {
 
   const reportRef = useRef<HTMLDivElement>(null);
 
+  // Accès PRO
   const isProActive =
-    user?.company.subscription === 'pro' &&
-    user?.company.expiryDate &&
+    user?.company?.subscription === 'pro' &&
+    user?.company?.expiryDate &&
     new Date(user.company.expiryDate) > new Date();
 
   if (!isProActive) {
@@ -50,26 +52,31 @@ export default function StockManagement() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">🔒 Fonctionnalité PRO</h2>
           <p className="text-gray-600 dark:text-gray-300 mb-6">La Gestion de Stock est réservée aux abonnés PRO.</p>
-          <button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-lg font-semibold">Passer à PRO - 299 MAD/mois</button>
+          <button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 rounded-lg font-semibold">
+            Passer à PRO - 299 MAD/mois
+          </button>
         </div>
       </div>
     );
   }
 
-  // --- helpers ---
+  // ---------- Helpers ----------
+  const getSelectedProduct = () => products.find(p => p.id === selectedProduct);
+  const unitLabel = () => (selectedProduct !== 'all' ? (getSelectedProduct()?.unit || 'unité') : '');
+
   const sumRectif = (productId: string) =>
     stockMovements
       .filter(m => m.productId === productId && m.type === 'adjustment')
       .reduce((s, m) => s + (m.quantity || 0), 0);
 
   const waitForFonts = async () => {
-    // évite graphiques vides pendant la capture
+    // évite graphes vides pendant la capture
     // @ts-ignore
     if (document.fonts?.ready) { try { await (document.fonts as any).ready; } catch {} }
     await new Promise(r => requestAnimationFrame(() => setTimeout(r, 180)));
   };
 
-  // --- data builders (identiques à avant, omis pour la brièveté non-essentielle) ---
+  // ---------- Data builders ----------
   const generateStockEvolutionData = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return [];
@@ -203,7 +210,7 @@ export default function StockManagement() {
     return rows.map(r => ({ ...r, intensity: maxQ ? r.quantity / maxQ : 0 }));
   };
 
-  // --- stats ---
+  // ---------- Stats ----------
   const calculateStats = (productFilter: string = 'all') => {
     let filtered = products;
     if (productFilter !== 'all') filtered = products.filter(p => p.id === productFilter);
@@ -248,7 +255,7 @@ export default function StockManagement() {
     { id: 'heatmap', label: 'Heatmap', icon: Activity }
   ] as const;
 
-  // --- export PDF (sections + scale-to-fit) ---
+  // ---------- Export PDF (sections + scale-to-fit) ----------
   async function exportPDFBySections(container: HTMLElement, filename: string) {
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const margin = 10, gap = 4;
@@ -287,16 +294,177 @@ export default function StockManagement() {
 
   const handleExportPDF = async () => {
     const el = reportRef.current; if (!el) return;
+    // rendre visible avec largeur A4 @96dpi
     const prev = { display: el.style.display, position: el.style.position, left: el.style.left, top: el.style.top, width: el.style.width, z: el.style.zIndex, bg: el.style.background, color: el.style.color };
     el.style.display = 'block'; el.style.position = 'fixed'; el.style.left = '0'; el.style.top = '0'; el.style.width = '794px'; el.style.zIndex = '2147483647'; el.style.background = '#fff'; el.style.color = '#111';
-    try { await waitForFonts(); await exportPDFBySections(el, `Rapport_Stock_Avance_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`); }
-    finally { el.style.display = prev.display; el.style.position = prev.position; el.style.left = prev.left; el.style.top = prev.top; el.style.width = prev.width; el.style.zIndex = prev.z; el.style.background = prev.bg; el.style.color = prev.color; }
+    try {
+      await waitForFonts();
+      await exportPDFBySections(el, `Rapport_Stock_Avance_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`);
+    } finally {
+      el.style.display = prev.display; el.style.position = prev.position; el.style.left = prev.left; el.style.top = prev.top; el.style.width = prev.width; el.style.zIndex = prev.z; el.style.background = prev.bg; el.style.color = prev.color;
+    }
   };
 
-  // --- UI ---
+  // ---------- RAPPORT IMPRIMABLE ----------
+  const logoUrl = (user?.company as any)?.logo || (user?.company as any)?.logoUrl || '';
+
   return (
     <div className="space-y-6">
-      {/* Header + Export */}
+      {/* ========= Rapport (caché) ========= */}
+      <div
+        ref={reportRef}
+        style={{ display: 'none', fontFamily: 'Arial, ui-sans-serif, system-ui', fontSize: 12, lineHeight: 1.4, color: '#111' }}
+      >
+        {/* Header avec logo */}
+        <section className="pdf-section" style={{ padding: 20, borderBottom: '2px solid #8B5CF6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="logo"
+                crossOrigin="anonymous"
+                style={{ width: 48, height: 48, objectFit: 'contain' }}
+              />
+            ) : null}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 20, color: '#8B5CF6', fontWeight: 800, marginBottom: 4 }}>
+                RAPPORT DE GESTION DE STOCK AVANCÉ
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{user?.company?.name || ''}</div>
+              <div style={{ fontSize: 11, marginTop: 2 }}>Généré le {new Date().toLocaleDateString('fr-FR')}</div>
+            </div>
+          </div>
+        </section>
+
+        {/* KPIs (avec unité si produit sélectionné) */}
+        <section className="pdf-section" style={{ padding: '12px 20px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Statistiques Globales</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <tbody>
+              <tr>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock initial</td>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
+                  {stats.totalStockInitial.toFixed(0)} {unitLabel()}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Valeur d'achat</td>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
+                  {stats.totalPurchaseValue.toLocaleString()} MAD
+                </td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Valeur de vente</td>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
+                  {stats.totalSalesValue.toLocaleString()} MAD
+                </td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Marge brute</td>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700, color: stats.grossMargin >= 0 ? '#059669' : '#DC2626' }}>
+                  {stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()} MAD
+                </td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock vendu</td>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
+                  {stats.totalQuantitySold.toFixed(0)} {unitLabel()}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock rectif</td>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700, color: stats.totalRectif >= 0 ? '#2563EB' : '#DC2626' }}>
+                  {stats.totalRectif >= 0 ? '+' : ''}{stats.totalRectif.toFixed(0)} {unitLabel()}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock restant</td>
+                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
+                  {stats.totalRemainingStock.toFixed(0)} {unitLabel()}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        {/* Donuts (taille réduite) */}
+        <section className="pdf-section" style={{ padding: '0 20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Répartition des Ventes</div>
+              <div style={{ width: '100%', height: 170, transform: 'translateZ(0)' }}>
+                <DonutChart data={salesDonutData} title="" subtitle="" centerValue={`${stats.totalSalesValue.toLocaleString()}`} centerLabel="MAD Total" />
+              </div>
+            </div>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Valeur du Stock Restant</div>
+              <div style={{ width: '100%', height: 170, transform: 'translateZ(0)' }}>
+                <DonutChart data={stockDonutData} title="" subtitle="" centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`} centerLabel="MAD Stock" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Marges (taille réduite) */}
+        <section className="pdf-section" style={{ padding: '10px 20px 0' }}>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Marge Brute par Produit</div>
+            <div style={{ width: '100%', height: 180, transform: 'translateZ(0)' }}>
+              <MarginChart data={marginData} />
+            </div>
+          </div>
+        </section>
+
+        {/* Ventes mensuelles (taille réduite) */}
+        <section className="pdf-section" style={{ padding: '10px 20px 0' }}>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Ventes Mensuelles {selectedYear}</div>
+            <div style={{ width: '100%', height: 200, transform: 'translateZ(0)' }}>
+              <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
+            </div>
+          </div>
+        </section>
+
+        {/* Tableau détaillé */}
+        <section className="pdf-section" style={{ padding: '10px 20px 20px' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Analyse détaillée par produit</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
+            <thead>
+              <tr>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'left' }}>Produit</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Stock initial</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Qté vendue</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Stock rectif</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Stock restant</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Achat (MAD)</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Vente (MAD)</th>
+                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Marge (MAD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {getDetailedProductData().map(p => (
+                <tr key={p.id}>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>{p.name}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.stock.toFixed(3)} {p.unit || ''}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.quantitySold.toFixed(3)} {p.unit || ''}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right', color: p.rectif >= 0 ? '#2563EB' : '#DC2626' }}>
+                    {p.rectif >= 0 ? '+' : ''}{p.rectif.toFixed(3)} {p.unit || ''}
+                  </td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.remainingStock.toFixed(3)} {p.unit || ''}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.purchaseValue.toLocaleString()}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.salesValue.toLocaleString()}</td>
+                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right', color: p.margin >= 0 ? '#059669' : '#DC2626' }}>
+                    {p.margin >= 0 ? '+' : ''}{p.margin.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </div>
+      {/* ========= /Rapport ========= */}
+
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center space-x-3">
@@ -304,7 +472,9 @@ export default function StockManagement() {
             <span>Gestion de Stock Avancée</span>
             <Crown className="w-6 h-6 text-yellow-500" />
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-2">KPI: Stock vendu, rectif & restant. Valeurs selon le filtre produit.</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-2">
+            KPI: Stock vendu, rectif & restant (avec unité si un produit est sélectionné).
+          </p>
         </div>
         <button onClick={handleExportPDF} className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2 rounded-lg">
           <Download className="w-4 h-4" />
@@ -317,45 +487,74 @@ export default function StockManagement() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Filtrer par produit</label>
-            <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <select
+              value={selectedProduct}
+              onChange={(e) => setSelectedProduct(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            >
               <option value="all">Tous les produits</option>
               {products.map(p => (<option key={p.id} value={p.id}>{p.name} ({p.category})</option>))}
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Année d'analyse</label>
-            <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            >
               {availableYears.map(year => (<option key={year} value={year}>{year}</option>))}
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Période d'analyse</label>
-            <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            >
               <option value="month">Mensuel</option>
               <option value="quarter">Trimestriel</option>
               <option value="year">Annuel</option>
             </select>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rechercher</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-gray-400 dark:text-gray-500" />
               </div>
-              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 w-full border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Rechercher..." />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 w-full border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                placeholder="Rechercher..."
+              />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Onglets */}
+      {/* Navigation */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="border-b border-gray-200 dark:border-gray-700">
           <nav className="flex space-x-8 px-6">
             {tabs.map(tab => {
               const Icon = tab.icon as any;
               return (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'}`}>
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-purple-500 text-purple-600'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300'
+                  }`}
+                >
                   <Icon className="w-4 h-4" />
                   <span>{tab.label}</span>
                 </button>
@@ -365,16 +564,20 @@ export default function StockManagement() {
         </div>
       </div>
 
-      {/* Vue d'ensemble avec 7 KPI */}
+      {/* Vue d'ensemble avec KPI supplémentaires */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Stock initial */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center"><Package className="w-6 h-6 text-white" /></div>
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                  <Package className="w-6 h-6 text-white" />
+                </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalStockInitial.toFixed(0)}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {stats.totalStockInitial.toFixed(0)} {unitLabel()}
+                  </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Stock Initial</p>
                 </div>
               </div>
@@ -383,9 +586,13 @@ export default function StockManagement() {
             {/* Valeur d'achat */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center"><ShoppingCart className="w-6 h-6 text-white" /></div>
+                <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center">
+                  <ShoppingCart className="w-6 h-6 text-white" />
+                </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalPurchaseValue.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {stats.totalPurchaseValue.toLocaleString()}
+                  </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Valeur d'Achat (MAD)</p>
                 </div>
               </div>
@@ -394,9 +601,13 @@ export default function StockManagement() {
             {/* Valeur de vente */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center"><DollarSign className="w-6 h-6 text-white" /></div>
+                <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-white" />
+                </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalSalesValue.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {stats.totalSalesValue.toLocaleString()}
+                  </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Valeur de Vente (MAD)</p>
                 </div>
               </div>
@@ -405,22 +616,32 @@ export default function StockManagement() {
             {/* Marge brute */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stats.grossMargin >= 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-red-600'}`}>
+                <div
+                  className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    stats.grossMargin >= 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-red-600'
+                  }`}
+                >
                   {stats.grossMargin >= 0 ? <TrendingUp className="w-6 h-6 text-white" /> : <TrendingDown className="w-6 h-6 text-white" />}
                 </div>
                 <div>
-                  <p className={`text-2xl font-bold ${stats.grossMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()}</p>
+                  <p className={`text-2xl font-bold ${stats.grossMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()}
+                  </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Marge Brute (MAD)</p>
                 </div>
               </div>
             </div>
 
-            {/* Stock restant (agrégé ou produit) */}
+            {/* Stock restant */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center"><Package className="w-6 h-6 text-white" /></div>
+                <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <Package className="w-6 h-6 text-white" />
+                </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalRemainingStock.toFixed(0)}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {stats.totalRemainingStock.toFixed(0)} {unitLabel()}
+                  </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Stock Restant</p>
                 </div>
               </div>
@@ -429,9 +650,13 @@ export default function StockManagement() {
             {/* Stock vendu */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center"><BarChart3 className="w-6 h-6 text-white" /></div>
+                <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stats.totalQuantitySold.toFixed(0)}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                    {stats.totalQuantitySold.toFixed(0)} {unitLabel()}
+                  </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Stock Vendu</p>
                 </div>
               </div>
@@ -440,10 +665,12 @@ export default function StockManagement() {
             {/* Stock rectif */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-sky-600 rounded-lg flex items-center justify-center"><RotateCcw className="w-6 h-6 text-white" /></div>
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-sky-600 rounded-lg flex items-center justify-center">
+                  <RotateCcw className="w-6 h-6 text-white" />
+                </div>
                 <div>
                   <p className={`text-2xl font-bold ${stats.totalRectif >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                    {stats.totalRectif >= 0 ? '+' : ''}{stats.totalRectif.toFixed(0)}
+                    {stats.totalRectif >= 0 ? '+' : ''}{stats.totalRectif.toFixed(0)} {unitLabel()}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-300">Stock Rectif</p>
                 </div>
@@ -451,20 +678,31 @@ export default function StockManagement() {
             </div>
           </div>
 
-          {/* Graphiques de synthèse */}
+          {/* Graphiques synthèse */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <DonutChart data={salesDonutData} title="Répartition des Ventes" subtitle="Par produit (valeur)" centerValue={`${stats.totalSalesValue.toLocaleString()}`} centerLabel="MAD Total" />
-            <DonutChart data={stockDonutData} title="Valeur du Stock Restant" subtitle="Par produit (valeur d'achat)" centerValue={`${stockDonutData.reduce((sum, i) => sum + i.value, 0).toLocaleString()}`} centerLabel="MAD Stock" />
+            <DonutChart
+              data={salesDonutData}
+              title="Répartition des Ventes"
+              subtitle="Par produit (valeur)"
+              centerValue={`${stats.totalSalesValue.toLocaleString()}`}
+              centerLabel="MAD Total"
+            />
+            <DonutChart
+              data={stockDonutData}
+              title="Valeur du Stock Restant"
+              subtitle="Par produit (valeur d'achat)"
+              centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`}
+              centerLabel="MAD Stock"
+            />
           </div>
         </div>
       )}
 
-      {/* autres onglets et tableau détaillé — inchangés */}
       {activeTab === 'evolution' && selectedProduct !== 'all' && (
         <StockEvolutionChart
           data={generateStockEvolutionData(selectedProduct)}
-          productName={products.find(p => p.id === selectedProduct)?.name || 'Produit'}
-          unit={products.find(p => p.id === selectedProduct)?.unit || 'unité'}
+          productName={getSelectedProduct()?.name || 'Produit'}
+          unit={getSelectedProduct()?.unit || 'unité'}
         />
       )}
 
@@ -476,12 +714,12 @@ export default function StockManagement() {
         </div>
       )}
 
-      {activeTab === 'margins' && (<MarginChart data={generateMarginData()} />)}
+      {activeTab === 'margins' && <MarginChart data={marginData} />}
 
       {activeTab === 'heatmap' && (
         <div className="space-y-6">
-          <MonthlySalesChart data={generateMonthlySalesData()} selectedYear={selectedYear} />
-          <SalesHeatmap data={generateHeatmapData()} products={products.map(p => p.name)} months={months} selectedYear={selectedYear} />
+          <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
+          <SalesHeatmap data={heatmapData} products={products.map(p => p.name)} months={months} selectedYear={selectedYear} />
         </div>
       )}
 
@@ -514,11 +752,15 @@ export default function StockManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{p.stock.toFixed(3)} {p.unit}</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {p.stock.toFixed(3)} {p.unit}
+                    </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">Min: {p.minStock.toFixed(3)} {p.unit}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{p.quantitySold.toFixed(3)} {p.unit}</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {p.quantitySold.toFixed(3)} {p.unit}
+                    </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">{p.ordersCount} commande{p.ordersCount > 1 ? 's' : ''}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -531,15 +773,21 @@ export default function StockManagement() {
                       <span className={`text-sm font-medium ${p.remainingStock <= p.minStock ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
                         {p.remainingStock.toFixed(3)} {p.unit}
                       </span>
-                      {p.remainingStock <= p.minStock && (<AlertTriangle className="w-4 h-4 text-red-500" />)}
+                      {p.remainingStock <= p.minStock && <AlertTriangle className="w-4 h-4 text-red-500" />}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{p.purchaseValue.toLocaleString()} MAD</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{p.salesValue.toLocaleString()} MAD</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {p.purchaseValue.toLocaleString()} MAD
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {p.salesValue.toLocaleString()} MAD
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
-                      <span className={`text-sm font-bold ${p.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>{p.margin >= 0 ? '+' : ''}{p.margin.toLocaleString()} MAD</span>
-                      {p.margin >= 0 ? (<CheckCircle className="w-4 h-4 text-green-500" />) : (<XCircle className="w-4 h-4 text-red-500" />)}
+                      <span className={`text-sm font-bold ${p.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {p.margin >= 0 ? '+' : ''}{p.margin.toLocaleString()} MAD
+                      </span>
+                      {p.margin >= 0 ? <CheckCircle className="w-4 h-4 text-green-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
                     </div>
                   </td>
                 </tr>
@@ -558,14 +806,25 @@ export default function StockManagement() {
       {/* Indicateurs globaux */}
       {stats.grossMargin < 0 && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-6">
-          <div className="flex items-center space-x-3 mb-4"><XCircle className="w-8 h-8 text-red-600" /><h3 className="text-lg font-semibold text-red-900 dark:text-red-100">⚠️ Performance Déficitaire</h3></div>
-          <p className="text-red-800 dark:text-red-200">Votre marge brute est négative de <strong>{Math.abs(stats.grossMargin).toLocaleString()} MAD</strong>.</p>
+          <div className="flex items-center space-x-3 mb-4">
+            <XCircle className="w-8 h-8 text-red-600" />
+            <h3 className="text-lg font-semibold text-red-900 dark:text-red-100">⚠️ Performance Déficitaire</h3>
+          </div>
+          <p className="text-red-800 dark:text-red-200">
+            Marge brute négative de <strong>{Math.abs(stats.grossMargin).toLocaleString()} MAD</strong>.
+          </p>
         </div>
       )}
+
       {stats.grossMargin > 0 && (
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl p-6">
-          <div className="flex items-center space-x-3 mb-4"><CheckCircle className="w-8 h-8 text-green-600" /><h3 className="text-lg font-semibold text-green-900 dark:text-green-100">✅ Performance Positive</h3></div>
-          <p className="text-green-800 dark:text-green-200">Marge brute : <strong>+{stats.grossMargin.toLocaleString()} MAD</strong>.</p>
+          <div className="flex items-center space-x-3 mb-4">
+            <CheckCircle className="w-8 h-8 text-green-600" />
+            <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">✅ Performance Positive</h3>
+          </div>
+          <p className="text-green-800 dark:text-green-200">
+            Marge brute : <strong>+{stats.grossMargin.toLocaleString()} MAD</strong>.
+          </p>
         </div>
       )}
     </div>
