@@ -28,7 +28,7 @@ const templates = [
   {
     id: 'template3',
     name: 'Moderne avec formes vertes Pro',
-    description: 'Design moderne avec éléments verts',
+    description: 'Design moderne ',
     isPro: true,
     preview: 'https://i.ibb.co/xqJDgm4J/3.png'
   },
@@ -37,14 +37,14 @@ const templates = [
     name: 'Bleu Élégant Pro',
     description: 'Design élégant avec thème bleu',
     isPro: true,
-    preview: 'https://i.ibb.co/cPChhS4/T4.png'
+    preview: 'https://i.ibb.co/5ggh4jzf/4.png'
   },
   {
     id: 'template5',
     name: 'Minimal Bleu Pro',
     description: 'Design minimaliste avec accents bleus',
     isPro: true,
-    preview: 'https://i.ibb.co/p64GL1nQ/T5.png'
+    preview: 'https://i.ibb.co/B5m2PLbL/5.png'
   }
 ];
 
