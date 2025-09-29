@@ -98,7 +98,6 @@ export default function Sidebar({ open, setOpen, onUpgrade }: SidebarProps) {
     { icon: BarChart3, label: 'Gest. financière', path: '/reports', isPro: true, permission: 'reports' },
     { icon: FolderKanban, label: 'Gestion de Projet', path: '/project-management', isPro: true, permission: 'projectManagement' },
     { icon: UserCheck, label: 'Gest. Humaine', path: '/hr-management', isPro: true, permission: 'hrManagement' },
-    { icon: Shield, label: 'Gest. de Compte', path: '/account-management', isPro: true, permission: 'settings' }
   ];
 
   const settingsMenu = [{ icon: Settings, label: t('settings'), path: '/settings', permission: 'settings' }];
