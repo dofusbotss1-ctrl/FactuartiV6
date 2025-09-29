@@ -68,15 +68,15 @@ export default function DonutChart({ data, title, subtitle, centerValue, centerL
               return (
                 <circle
                   key={index}
-                  cx={size / 3}
-                  cy={size / 3}
+                  cx={size / 2}
+                  cy={size / 2}
                   r={radius}
                   fill="transparent"
                   stroke={item.color}
                   strokeWidth={strokeWidth}
                   strokeDasharray={strokeDasharray}
                   strokeDashoffset={strokeDashoffset}
-                  className={`transition-all duration-700 ease-out cursor-pointer ${
+                  className={`transition-all duration-300 ease-out cursor-pointer ${
                     hoveredSegment === index ? 'opacity-80' : 'opacity-100'
                   }`}
                   style={{
