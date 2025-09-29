@@ -392,7 +392,7 @@ export default function StockManagement() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Répartition des Ventes</div>
-              <div style={{ width: '100%', height: 170, transform: 'translateZ(0)' }}>
+              <div style={{ width: '40%', height: 170, transform: 'translateZ(0)' }}>
                 <DonutChart data={salesDonutData} title="" subtitle="" centerValue={`${stats.totalSalesValue.toLocaleString()}`} centerLabel="MAD Total" />
               </div>
             </div>
