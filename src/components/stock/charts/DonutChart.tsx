@@ -68,8 +68,8 @@ export default function DonutChart({ data, title, subtitle, centerValue, centerL
               return (
                 <circle
                   key={index}
-                  cx={size / 2}
-                  cy={size / 2}
+                  cx={size / 3}
+                  cy={size / 3}
                   r={radius}
                   fill="transparent"
                   stroke={item.color}
