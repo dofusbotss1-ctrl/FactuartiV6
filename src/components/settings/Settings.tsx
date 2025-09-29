@@ -692,35 +692,7 @@ export default function Settings() {
           </div>
 
           {/* Divers */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Conditions de paiement par défaut
-                </label>
-                <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                  <option>Paiement à 30 jours</option>
-                  <option>Paiement à 15 jours</option>
-                  <option>Paiement à 60 jours</option>
-                  <option>Paiement comptant</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="rounded border-gray-300 dark:border-gray-600 text-teal-600 focus:ring-teal-500"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">
-                    Envoyer automatiquement les factures par email
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
+       
 
         {/* Quick Actions / Right column */}
         <div className="space-y-6">
