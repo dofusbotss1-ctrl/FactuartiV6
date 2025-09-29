@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { Users, Building2, FileText, ShoppingCart, TrendingUp } from 'lucide-react';
+import { useData } from '../../../contexts/DataContext';
 
 interface ClientTypeData {
   invoices: {
@@ -22,8 +23,14 @@ interface ClientTypeAnalysisChartProps {
 }
 
 export default function ClientTypeAnalysisChart({ data }: ClientTypeAnalysisChartProps) {
+  const { invoices } = useData();
   const [viewMode, setViewMode] = useState<'revenue' | 'count'>('revenue');
   
+  // Fonction pour vérifier si une commande société a déjà une facture
+  const hasInvoiceForOrder = (orderId: string) => {
+    return invoices.some(invoice => invoice.orderId === orderId);
+  };
+
   // Données pour le graphique en barres
   const chartData = [
     {
@@ -32,7 +39,7 @@ export default function ClientTypeAnalysisChart({ data }: ClientTypeAnalysisChar
       particuliers: viewMode === 'revenue' ? data.invoices.particuliers.revenue : data.invoices.particuliers.count
     },
     {
-      type: 'Commandes',
+      type: 'Commandes (optimisées)',
       societes: viewMode === 'revenue' ? data.orders.societes.revenue : data.orders.societes.count,
       particuliers: viewMode === 'revenue' ? data.orders.particuliers.revenue : data.orders.particuliers.count
     }
