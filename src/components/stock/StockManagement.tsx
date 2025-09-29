@@ -310,159 +310,160 @@ export default function StockManagement() {
 
   return (
     <div className="space-y-6">
-      {/* ========= Rapport (caché) ========= */}
-      <div
-        ref={reportRef}
-        style={{ display: 'none', fontFamily: 'Arial, ui-sans-serif, system-ui', fontSize: 12, lineHeight: 1.4, color: '#111' }}
-      >
-        {/* Header avec logo */}
-        <section className="pdf-section" style={{ padding: 20, borderBottom: '2px solid #8B5CF6' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="logo"
-                crossOrigin="anonymous"
-                style={{ width: 48, height: 48, objectFit: 'contain' }}
-              />
-            ) : null}
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 20, color: '#8B5CF6', fontWeight: 800, marginBottom: 4 }}>
-                RAPPORT DE GESTION DE STOCK AVANCÉ
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{user?.company?.name || ''}</div>
-              <div style={{ fontSize: 11, marginTop: 2 }}>Généré le {new Date().toLocaleDateString('fr-FR')}</div>
-            </div>
-          </div>
-        </section>
-
-        {/* KPIs (avec unité si produit sélectionné) */}
-        <section className="pdf-section" style={{ padding: '12px 20px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Statistiques Globales</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-            <tbody>
-              <tr>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock initial</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
-                  {stats.totalStockInitial.toFixed(0)} {unitLabel()}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Valeur d'achat</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
-                  {stats.totalPurchaseValue.toLocaleString()} MAD
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Valeur de vente</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
-                  {stats.totalSalesValue.toLocaleString()} MAD
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Marge brute</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700, color: stats.grossMargin >= 0 ? '#059669' : '#DC2626' }}>
-                  {stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()} MAD
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock vendu</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
-                  {stats.totalQuantitySold.toFixed(0)} {unitLabel()}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock rectif</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700, color: stats.totalRectif >= 0 ? '#2563EB' : '#DC2626' }}>
-                  {stats.totalRectif >= 0 ? '+' : ''}{stats.totalRectif.toFixed(0)} {unitLabel()}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>Stock restant</td>
-                <td style={{ border: '1px solid #e5e7eb', padding: 6, fontWeight: 700 }}>
-                  {stats.totalRemainingStock.toFixed(0)} {unitLabel()}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        {/* Donuts (taille réduite) */}
-        <section className="pdf-section" style={{ padding: '0 20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
-              <div style={{ fontWeight: 1000, marginBottom: 6 }}>Répartition des Ventes</div>
-              <div style={{ width: '100%', height: 170, transform: 'translateZ(0)' }}>
-                <DonutChart data={salesDonutData} title="" subtitle="" centerValue={`${stats.totalSalesValue.toLocaleString()}`} centerLabel="MAD Total" />
-              </div>
-            </div>
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Valeur du Stock Restant</div>
-              <div style={{ width: '100%', height: 170, transform: 'translateZ(0)' }}>
-                <DonutChart data={stockDonutData} title="" subtitle="" centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`} centerLabel="MAD Stock" />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Marges (taille réduite) */}
-        <section className="pdf-section" style={{ padding: '10px 20px 0' }}>
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Marge Brute par Produit</div>
-            <div style={{ width: '100%', height: 180, transform: 'translateZ(0)' }}>
-              <MarginChart data={marginData} />
-            </div>
-          </div>
-        </section>
-
-        {/* Ventes mensuelles (taille réduite) */}
-        <section className="pdf-section" style={{ padding: '10px 20px 0' }}>
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Ventes Mensuelles {selectedYear}</div>
-            <div style={{ width: '100%', height: 200, transform: 'translateZ(0)' }}>
-              <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
-            </div>
-          </div>
-        </section>
-
-        {/* Tableau détaillé */}
-        <section className="pdf-section" style={{ padding: '10px 20px 20px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Analyse détaillée par produit</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
-            <thead>
-              <tr>
-                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'left' }}>Produit</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Stock initial</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Qté vendue</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Stock rectif</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Stock restant</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Achat (MAD)</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Vente (MAD)</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>Marge (MAD)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {getDetailedProductData().map(p => (
-                <tr key={p.id}>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 6 }}>{p.name}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.stock.toFixed(3)} {p.unit || ''}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.quantitySold.toFixed(3)} {p.unit || ''}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right', color: p.rectif >= 0 ? '#2563EB' : '#DC2626' }}>
-                    {p.rectif >= 0 ? '+' : ''}{p.rectif.toFixed(3)} {p.unit || ''}
-                  </td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.remainingStock.toFixed(3)} {p.unit || ''}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.purchaseValue.toLocaleString()}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right' }}>{p.salesValue.toLocaleString()}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 6, textAlign: 'right', color: p.margin >= 0 ? '#059669' : '#DC2626' }}>
-                    {p.margin >= 0 ? '+' : ''}{p.margin.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+    {/* ========= Rapport (caché) – NOUVELLE VERSION ========= */}
+<div
+  ref={reportRef}
+  style={{ display: 'none', fontFamily: 'Arial, ui-sans-serif, system-ui', fontSize: 12, lineHeight: 1.4, color: '#111' }}
+>
+  {/* Header avec logo */}
+  <section className="pdf-section" style={{ padding: 16, borderBottom: '2px solid #8B5CF6' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt="logo"
+          crossOrigin="anonymous"
+          style={{ width: 40, height: 40, objectFit: 'contain' }}
+        />
+      ) : null}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 18, color: '#8B5CF6', fontWeight: 800, marginBottom: 2 }}>
+          RAPPORT DE GESTION DE STOCK AVANCÉ
+        </div>
+        <div style={{ fontSize: 12, fontWeight: 700 }}>{user?.company?.name || ''}</div>
+        <div style={{ fontSize: 10, marginTop: 2 }}>Généré le {new Date().toLocaleDateString('fr-FR')}</div>
       </div>
-      {/* ========= /Rapport ========= */}
+    </div>
+  </section>
+
+  {/* KPIs (avec unité si produit sélectionné) */}
+  <section className="pdf-section" style={{ padding: '10px 16px' }}>
+    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Statistiques Globales</div>
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
+      <tbody>
+        <tr>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>Stock initial</td>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5, fontWeight: 700 }}>
+            {stats.totalStockInitial.toFixed(0)} {unitLabel()}
+          </td>
+        </tr>
+        <tr>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>Valeur d'achat</td>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5, fontWeight: 700 }}>
+            {stats.totalPurchaseValue.toLocaleString()} MAD
+          </td>
+        </tr>
+        <tr>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>Valeur de vente</td>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5, fontWeight: 700 }}>
+            {stats.totalSalesValue.toLocaleString()} MAD
+          </td>
+        </tr>
+        <tr>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>Marge brute</td>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5, fontWeight: 700, color: stats.grossMargin >= 0 ? '#059669' : '#DC2626' }}>
+            {stats.grossMargin >= 0 ? '+' : ''}{stats.grossMargin.toLocaleString()} MAD
+          </td>
+        </tr>
+        <tr>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>Stock vendu</td>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5, fontWeight: 700 }}>
+            {stats.totalQuantitySold.toFixed(0)} {unitLabel()}
+          </td>
+        </tr>
+        <tr>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>Stock rectif</td>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5, fontWeight: 700, color: stats.totalRectif >= 0 ? '#2563EB' : '#DC2626' }}>
+            {stats.totalRectif >= 0 ? '+' : ''}{stats.totalRectif.toFixed(0)} {unitLabel()}
+          </td>
+        </tr>
+        <tr>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>Stock restant</td>
+          <td style={{ border: '1px solid #e5e7eb', padding: 5, fontWeight: 700 }}>
+            {stats.totalRemainingStock.toFixed(0)} {unitLabel()}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  {/* Donuts – taille réduite */}
+  <section className="pdf-section" style={{ padding: '0 16px' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+        <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Répartition des Ventes</div>
+        <div style={{ width: '100%', height: 150, transform: 'translateZ(0)' }}>
+          <DonutChart data={salesDonutData} title="" subtitle="" centerValue={`${stats.totalSalesValue.toLocaleString()}`} centerLabel="MAD Total" />
+        </div>
+      </div>
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+        <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Valeur du Stock Restant</div>
+        <div style={{ width: '100%', height: 150, transform: 'translateZ(0)' }}>
+          <DonutChart data={stockDonutData} title="" subtitle="" centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`} centerLabel="MAD Stock" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* Marges – taille réduite */}
+  <section className="pdf-section" style={{ padding: '8px 16px 0' }}>
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+      <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Marge Brute par Produit</div>
+      <div style={{ width: '100%', height: 160, transform: 'translateZ(0)' }}>
+        <MarginChart data={marginData} />
+      </div>
+    </div>
+  </section>
+
+  {/* Ventes mensuelles – taille réduite */}
+  <section className="pdf-section" style={{ padding: '8px 16px 0' }}>
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
+      <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Ventes Mensuelles {selectedYear}</div>
+      <div style={{ width: '100%', height: 165, transform: 'translateZ(0)', overflow: 'hidden' }}>
+        <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
+      </div>
+    </div>
+  </section>
+
+  {/* Tableau détaillé */}
+  <section className="pdf-section" style={{ padding: '8px 16px 14px' }}>
+    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Analyse détaillée par produit</div>
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+      <thead>
+        <tr>
+          <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'left' }}>Produit</th>
+          <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Stock initial</th>
+          <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Qté vendue</th>
+          <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Stock rectif</th>
+          <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Stock restant</th>
+          <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Achat (MAD)</th>
+          <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Vente (MAD)</th>
+          <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Marge (MAD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {getDetailedProductData().map(p => (
+          <tr key={p.id}>
+            <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>{p.name}</td>
+            <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.stock.toFixed(3)} {p.unit || ''}</td>
+            <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.quantitySold.toFixed(3)} {p.unit || ''}</td>
+            <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right', color: p.rectif >= 0 ? '#2563EB' : '#DC2626' }}>
+              {p.rectif >= 0 ? '+' : ''}{p.rectif.toFixed(3)} {p.unit || ''}
+            </td>
+            <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.remainingStock.toFixed(3)} {p.unit || ''}</td>
+            <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.purchaseValue.toLocaleString()}</td>
+            <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.salesValue.toLocaleString()}</td>
+            <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right', color: p.margin >= 0 ? '#059669' : '#DC2626' }}>
+              {p.margin >= 0 ? '+' : ''}{p.margin.toLocaleString()}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+</div>
+{/* ========= /Rapport ========= */}
+
 
       {/* Header */}
       <div className="flex justify-between items-center">
