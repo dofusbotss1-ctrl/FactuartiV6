@@ -887,9 +887,7 @@ export default function Settings() {
               <div className="w-12 h-12 bg-gradient-to-br from-teal-600 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <Palette className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                Design Marocain
-              </h3>
+             
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                 Interface adaptée aux standards locaux avec support complet de l'arabe
               </p>
