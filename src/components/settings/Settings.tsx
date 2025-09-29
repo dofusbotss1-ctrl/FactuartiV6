@@ -887,7 +887,7 @@ export default function Settings() {
               
              
              
-              <div className="text-2xl">🇲🇦</div>
+           
             </div>
           </div>
         </div>
