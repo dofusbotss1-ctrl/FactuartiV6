@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { BarChart3, TrendingUp, AlertTriangle, DollarSign, Calendar, Download,Crown } from 'lucide-react';
+import { BarChart3, TrendingUp, AlertTriangle, DollarSign, Calendar, Download, Crown, ShoppingCart, Users, FileText, Package } from 'lucide-react';
 import { useData } from '../../contexts/DataContext';
+import { useOrder } from '../../contexts/OrderContext';
 import { useAuth } from '../../contexts/AuthContext';
 import FinancialAlerts from './FinancialAlerts';
 import FinancialKPIs from './FinancialKPIs';
@@ -10,10 +11,14 @@ import PaymentStatusChart from './charts/PaymentStatusChart';
 import PaymentMethodChart from './charts/PaymentMethodChart';
 import PaymentDelayChart from './charts/PaymentDelayChart';
 import TopClientsChart from './charts/TopClientsChart';
+import OrdersRevenueChart from './charts/OrdersRevenueChart';
+import ClientTypeAnalysisChart from './charts/ClientTypeAnalysisChart';
+import ComprehensiveRevenueChart from './charts/ComprehensiveRevenueChart';
 
 const Reports: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
-  const { invoices } = useData();
+  const { invoices, clients } = useData();
+  const { orders } = useOrder();
   const { user } = useAuth();
 
   // Vérifier l'accès PRO
@@ -134,6 +139,125 @@ const Reports: React.FC = () => {
     }));
   }, [invoices]);
 
+  // Données pour l'analyse des commandes
+  const ordersRevenueData = useMemo(() => {
+    const months = [
+      'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun',
+      'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'
+    ];
+    
+    const currentYear = new Date().getFullYear();
+    
+    return months.map((month, index) => {
+      const monthOrders = orders.filter(order => {
+        const orderDate = new Date(order.orderDate);
+        return orderDate.getMonth() === index && 
+               orderDate.getFullYear() === currentYear &&
+               order.status === 'livre';
+      });
+      
+      const totalRevenue = monthOrders.reduce((sum, order) => sum + order.totalTTC, 0);
+      const societesRevenue = monthOrders
+        .filter(order => order.clientType === 'societe')
+        .reduce((sum, order) => sum + order.totalTTC, 0);
+      const particuliersRevenue = monthOrders
+        .filter(order => order.clientType === 'personne_physique')
+        .reduce((sum, order) => sum + order.totalTTC, 0);
+      
+      return {
+        month,
+        totalRevenue,
+        societesRevenue,
+        particuliersRevenue,
+        ordersCount: monthOrders.length
+      };
+    });
+  }, [orders]);
+
+  // Analyse par type de client
+  const clientTypeAnalysis = useMemo(() => {
+    const invoiceStats = {
+      societes: {
+        count: invoices.filter(inv => inv.client && clients.find(c => c.id === inv.clientId)).length,
+        revenue: invoices
+          .filter(inv => inv.client && clients.find(c => c.id === inv.clientId) && (inv.status === 'paid' || inv.status === 'collected'))
+          .reduce((sum, inv) => sum + inv.totalTTC, 0)
+      },
+      particuliers: {
+        count: 0, // Les factures sont toujours liées à des clients sociétés
+        revenue: 0
+      }
+    };
+    
+    const orderStats = {
+      societes: {
+        count: orders.filter(order => order.clientType === 'societe' && order.status === 'livre').length,
+        revenue: orders
+          .filter(order => order.clientType === 'societe' && order.status === 'livre')
+          .reduce((sum, order) => sum + order.totalTTC, 0)
+      },
+      particuliers: {
+        count: orders.filter(order => order.clientType === 'personne_physique' && order.status === 'livre').length,
+        revenue: orders
+          .filter(order => order.clientType === 'personne_physique' && order.status === 'livre')
+          .reduce((sum, order) => sum + order.totalTTC, 0)
+      }
+    };
+    
+    return {
+      invoices: invoiceStats,
+      orders: orderStats,
+      combined: {
+        societes: {
+          count: invoiceStats.societes.count + orderStats.societes.count,
+          revenue: invoiceStats.societes.revenue + orderStats.societes.revenue
+        },
+        particuliers: {
+          count: invoiceStats.particuliers.count + orderStats.particuliers.count,
+          revenue: invoiceStats.particuliers.revenue + orderStats.particuliers.revenue
+        }
+      }
+    };
+  }, [invoices, orders, clients]);
+
+  // Données complètes pour le graphique de revenus
+  const comprehensiveRevenueData = useMemo(() => {
+    const months = [
+      'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun',
+      'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'
+    ];
+    
+    const currentYear = new Date().getFullYear();
+    
+    return months.map((month, index) => {
+      // Revenus des factures
+      const invoiceRevenue = invoices
+        .filter(invoice => {
+          const invoiceDate = new Date(invoice.date);
+          return invoiceDate.getMonth() === index && 
+                 invoiceDate.getFullYear() === currentYear &&
+                 (invoice.status === 'paid' || invoice.status === 'collected');
+        })
+        .reduce((sum, invoice) => sum + invoice.totalTTC, 0);
+      
+      // Revenus des commandes
+      const orderRevenue = orders
+        .filter(order => {
+          const orderDate = new Date(order.orderDate);
+          return orderDate.getMonth() === index && 
+                 orderDate.getFullYear() === currentYear &&
+                 order.status === 'livre';
+        })
+        .reduce((sum, order) => sum + order.totalTTC, 0);
+      
+      return {
+        month,
+        invoices: invoiceRevenue,
+        orders: orderRevenue,
+        total: invoiceRevenue + orderRevenue
+      };
+    });
+  }, [invoices, orders]);
   // Préparer les données de mode de paiement avec les vraies données
   const paymentMethodData = useMemo(() => {
     if (!invoices || invoices.length === 0) {
@@ -259,12 +383,80 @@ const Reports: React.FC = () => {
       </div>
 
       {/* KPIs Financiers */}
-      <FinancialKPIs invoices={invoices || []} />
+      <FinancialKPIs invoices={invoices || []} orders={orders || []} />
+
+      {/* Statistiques globales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+              <FileText className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {clientTypeAnalysis.invoices.societes.revenue.toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Factures Sociétés</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+              <ShoppingCart className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {clientTypeAnalysis.orders.societes.revenue.toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Commandes Sociétés</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+              <Users className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {clientTypeAnalysis.orders.particuliers.revenue.toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Commandes Particuliers</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
+              <Package className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {(clientTypeAnalysis.combined.societes.revenue + clientTypeAnalysis.combined.particuliers.revenue).toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Total Combiné</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Graphiques principaux */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RevenueEvolutionChart data={revenueEvolutionData} />
         <CashflowChart invoices={invoices || []} />
+      </div>
+
+      {/* Analyse complète des revenus */}
+      <ComprehensiveRevenueChart data={comprehensiveRevenueData} />
+
+      {/* Analyse des commandes par type de client */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <OrdersRevenueChart data={ordersRevenueData} />
+        <ClientTypeAnalysisChart data={clientTypeAnalysis} />
       </div>
 
       {/* Top Clients */}

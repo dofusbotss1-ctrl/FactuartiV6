@@ -86,13 +86,12 @@ export default function StatsCards() {
       bgColor: 'bg-gradient-to-br from-emerald-500 to-teal-600',
       hoverColor: 'hover:from-emerald-600 hover:to-teal-700'
     },
-    // ⬇️ Carte mise à jour : Total Commandes (à la place de Factures Non Payées)
     {
-      title: 'Total Commandes',
-      value: orders.length.toString(),
-      subtitle: 'Commandes enregistrées',
+      title: 'CA Commandes Livrées',
+      value: `${orders.filter(o => o.status === 'livre').reduce((sum, o) => sum + o.totalTTC, 0).toLocaleString()} MAD`,
+      subtitle: 'Chiffre d\'affaires commandes',
       trend: 0, // pas de calcul de tendance pour l’instant
-      trendLabel: `${orders.length} commande${orders.length > 1 ? 's' : ''} au total`,
+      trendLabel: `${orders.filter(o => o.status === 'livre').length} commande${orders.filter(o => o.status === 'livre').length > 1 ? 's' : ''} livrées`,
       icon: ShoppingCart,
       bgColor: 'bg-gradient-to-br from-sky-500 to-blue-600',
       hoverColor: 'hover:from-sky-600 hover:to-blue-700'
@@ -116,6 +115,16 @@ export default function StatsCards() {
       icon: Package,
       bgColor: 'bg-gradient-to-br from-orange-500 to-red-600',
       hoverColor: 'hover:from-orange-600 hover:to-red-700'
+    },
+    {
+      title: 'CA Particuliers',
+      value: `${orders.filter(o => o.status === 'livre' && o.clientType === 'personne_physique').reduce((sum, o) => sum + o.totalTTC, 0).toLocaleString()} MAD`,
+      subtitle: 'Commandes particuliers',
+      trend: 0,
+      trendLabel: `${orders.filter(o => o.status === 'livre' && o.clientType === 'personne_physique').length} commandes particuliers`,
+      icon: Users,
+      bgColor: 'bg-gradient-to-br from-purple-500 to-pink-600',
+      hoverColor: 'hover:from-purple-600 hover:to-pink-700'
     }
   ];
 
@@ -139,7 +148,7 @@ export default function StatsCards() {
 
   return (
     <motion.div
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
       variants={containerVariants}
       initial="hidden"
       animate="visible"

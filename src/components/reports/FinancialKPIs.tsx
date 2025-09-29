@@ -1,13 +1,15 @@
 import React from 'react';
 import { Invoice } from '../../contexts/DataContext';
+import { Order } from '../../contexts/OrderContext';
 import { Target, Percent, Clock, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 
 interface FinancialKPIsProps {
   invoices: Invoice[];
+  orders: Order[];
 }
 
-export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
+export default function FinancialKPIs({ invoices, orders }: FinancialKPIsProps) {
   // Calcul du DSO (Days Sales Outstanding)
   const calculateDSO = () => {
     const paidInvoices = invoices.filter(inv => inv.status === 'paid' && inv.dueDate);
@@ -72,13 +74,32 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
 
   // Calcul de la marge brute
   const calculateGrossMargin = () => {
-    // Estimation basée sur les prix de vente vs prix d'achat des produits
-    const totalSales = invoices
+    // Calcul basé sur les factures payées + commandes livrées
+    const invoiceSales = invoices
       .filter(inv => inv.status === 'paid' || inv.status === 'collected')
       .reduce((sum, inv) => sum + inv.totalTTC, 0);
     
+    const orderSales = orders
+      .filter(order => order.status === 'livre')
+      .reduce((sum, order) => sum + order.totalTTC, 0);
+    
+    const totalSales = invoiceSales + orderSales;
+    
     // Estimation de la marge à 30% (à ajuster selon vos données réelles)
     return totalSales * 0.3;
+  };
+
+  // Calcul du chiffre d'affaires total (factures + commandes)
+  const calculateTotalRevenue = () => {
+    const invoiceRevenue = invoices
+      .filter(inv => inv.status === 'paid' || inv.status === 'collected')
+      .reduce((sum, inv) => sum + inv.totalTTC, 0);
+    
+    const orderRevenue = orders
+      .filter(order => order.status === 'livre')
+      .reduce((sum, order) => sum + order.totalTTC, 0);
+    
+    return { invoiceRevenue, orderRevenue, total: invoiceRevenue + orderRevenue };
   };
 
   const dso = calculateDSO();
@@ -86,6 +107,7 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
   const growthRate = calculateGrowthRate();
   const averageBasket = calculateAverageBasket();
   const grossMargin = calculateGrossMargin();
+  const totalRevenue = calculateTotalRevenue();
 
   const kpis = [
     {
@@ -132,6 +154,15 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
       color: grossMargin > 0 ? 'text-green-600' : 'text-red-600',
       bgColor: grossMargin > 0 ? 'from-green-500 to-emerald-600' : 'from-red-500 to-red-600',
       trend: grossMargin > 0 ? 'Positif' : 'Négatif'
+    },
+    {
+      title: 'CA Total',
+      subtitle: 'Factures + Commandes',
+      value: `${totalRevenue.total.toLocaleString()} MAD`,
+      icon: DollarSign,
+      color: 'text-purple-600',
+      bgColor: 'from-purple-500 to-indigo-600',
+      trend: 'Global'
     }
   ];
 
@@ -181,6 +212,8 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
             <p>• DSO {dso <= 30 ? 'excellent' : dso <= 45 ? 'correct' : 'à améliorer'}</p>
             <p>• Recouvrement {recoveryRate >= 80 ? 'très bon' : recoveryRate >= 60 ? 'moyen' : 'faible'}</p>
             <p>• Croissance {growthRate > 0 ? 'positive' : growthRate < 0 ? 'négative' : 'stable'}</p>
+            <p>• CA Factures: {totalRevenue.invoiceRevenue.toLocaleString()} MAD</p>
+            <p>• CA Commandes: {totalRevenue.orderRevenue.toLocaleString()} MAD</p>
           </div>
         </div>
         
@@ -190,6 +223,7 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
             <p>• DSO cible: ≤ 30 jours</p>
             <p>• Taux recouvrement: ≥ 85%</p>
             <p>• Croissance mensuelle: ≥ 5%</p>
+            <p>• Équilibre Factures/Commandes optimal</p>
           </div>
         </div>
       </div>
