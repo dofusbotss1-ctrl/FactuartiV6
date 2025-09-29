@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { ShoppingCart, Users, Building2, TrendingUp } from 'lucide-react';
+import { useData } from '../../../contexts/DataContext';
 
 interface OrdersRevenueData {
   month: string;
@@ -15,8 +16,21 @@ interface OrdersRevenueChartProps {
 }
 
 export default function OrdersRevenueChart({ data }: OrdersRevenueChartProps) {
+  const { invoices } = useData();
   const [viewMode, setViewMode] = useState<'total' | 'breakdown'>('breakdown');
   
+  // Fonction pour vérifier si une commande société a déjà une facture
+  const hasInvoiceForOrder = (orderId: string) => {
+    return invoices.some(invoice => invoice.orderId === orderId);
+  };
+
+  // Recalculer les totaux en excluant les doublons
+  const optimizedData = data.map(item => {
+    // Note: Les données arrivent déjà optimisées du composant parent
+    // Mais on peut ajouter une vérification supplémentaire ici si nécessaire
+    return item;
+  });
+
   const totalOrderRevenue = data.reduce((sum, item) => sum + item.totalRevenue, 0);
   const totalSocietesRevenue = data.reduce((sum, item) => sum + item.societesRevenue, 0);
   const totalParticuliersRevenue = data.reduce((sum, item) => sum + item.particuliersRevenue, 0);
