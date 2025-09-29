@@ -399,16 +399,7 @@ export default function StockManagement() {
           </div>
         </section>
 
-        {/* Marges – taille fixe */}
-        <section className="pdf-section" style={{ padding: '8px 14px 0' }}>
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Marge Brute par Produit</div>
-            <div style={{ width: 700, height: 150, margin: '0 auto' }}>
-              <MarginChart data={marginData} />
-            </div>
-          </div>
-        </section>
-
+      
         {/* Ventes mensuelles – taille fixe */}
         <section className="pdf-section" style={{ padding: '8px 14px 0' }}>
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
