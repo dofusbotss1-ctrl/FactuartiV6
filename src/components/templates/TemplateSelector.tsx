@@ -16,21 +16,21 @@ const templates = [
     name: 'Classic Free',
     description: 'Mise en page simple et sobre (gratuit)',
     isPro: false,
-    preview: 'https://i.ibb.co/YBV0zw2v/T1.png'
+    preview: 'https://i.ibb.co/kV2f4xWC/1.png'
   },
   {
     id: 'template2',
     name: 'Noir Classique Pro',
     description: 'Design classique avec fond noir',
     isPro: true,
-    preview: 'https://i.ibb.co/d4xfv93F/T2.png'
+    preview: 'https://i.ibb.co/dJcZM05n/2.png'
   },
   {
     id: 'template3',
     name: 'Moderne avec formes vertes Pro',
     description: 'Design moderne avec éléments verts',
     isPro: true,
-    preview: 'https://i.ibb.co/wh4V38jY/T3.png'
+    preview: 'https://i.ibb.co/xqJDgm4J/3.png'
   },
   {
     id: 'template4',
