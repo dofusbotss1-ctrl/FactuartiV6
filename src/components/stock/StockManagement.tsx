@@ -386,13 +386,13 @@ export default function StockManagement() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Répartition des Ventes</div>
-              <div style={{ width: 340, height: 140, margin: '0 auto' }}>
+              <div style={{ width: 340, height: 400, margin: '0 auto' }}>
                 <DonutChart data={salesDonutData} title="" subtitle="" centerValue={`${stats.totalSalesValue.toLocaleString()}`} centerLabel="MAD Total" />
               </div>
             </div>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
               <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Valeur du Stock Restant</div>
-              <div style={{ width: 340, height: 140, margin: '0 auto' }}>
+              <div style={{ width: 340, height: 400, margin: '0 auto' }}>
                 <DonutChart data={stockDonutData} title="" subtitle="" centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`} centerLabel="MAD Stock" />
               </div>
             </div>
