@@ -141,7 +141,7 @@ export default function HomePage() {
 
               <motion.div variants={fadeUp} className="space-y-3 text-gray-800">
                 <div className="flex items-start gap-3"><span>✨</span><p><strong>Pourquoi choisir Factourati ?</strong></p></div>
-                <div className="flex items-start gap-3"><span>📑</span><p><strong>Factouration</strong> : créez et envoyez vos devis & factures en quelques clics.</p></div>
+                <div className="flex items-start gap-3"><span>📑</span><p><strong>Facturation</strong> : créez et envoyez vos devis & factures en quelques clics.</p></div>
                 <div className="flex items-start gap-3"><span>📊</span><p><strong>Tableau de bord intelligent</strong> : suivez vos ventes, dépenses, paiements reçus et impayés en temps réel.</p></div>
                 <div className="flex items-start gap-3"><span>💡</span><p><strong>Factourati.com : Plus qu’un logiciel</strong> : un partenaire de croissance — clair, rapide, 100 % conforme au Maroc.</p></div>
               </motion.div>
