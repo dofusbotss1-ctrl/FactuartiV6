@@ -76,8 +76,8 @@ export default function DonutChart({ data, title, subtitle, centerValue, centerL
                   strokeWidth={strokeWidth}
                   strokeDasharray={strokeDasharray}
                   strokeDashoffset={strokeDashoffset}
-                  className={`transition-all duration-300 ease-out cursor-pointer ${
-                    hoveredSegment === index ? 'opacity-80' : 'opacity-100'
+                  className={`transition-all duration-700 ease-out cursor-pointer ${
+                    hoveredSegment === index ? 'opacity-20' : 'opacity-100'
                   }`}
                   style={{
                     filter: hoveredSegment === index ? 'brightness(1.1)' : 'none',
