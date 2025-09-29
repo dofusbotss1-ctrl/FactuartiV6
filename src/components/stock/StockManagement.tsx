@@ -580,61 +580,6 @@ export default function StockManagement() {
 {/* ========= /Rapport (caché) — version optimisée ========= */}
 
 
-      
-       
-
-        {/* Tableau détaillé */}
-        <section className="pdf-section" style={{ padding: '8px 14px 12px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Analyse détaillée par produit</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
-            <thead>
-              <tr>
-                <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'left' }}>Produit</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Stock initial</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Qté vendue</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Stock rectif</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Stock restant</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Achat (MAD)</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Vente (MAD)</th>
-                <th style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>Marge (MAD)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {getDetailedProductData().map(p => (
-                <tr key={p.id}>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 5 }}>{p.name}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.stock.toFixed(3)} {p.unit || ''}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.quantitySold.toFixed(3)} {p.unit || ''}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right', color: p.rectif >= 0 ? '#2563EB' : '#DC2626' }}>
-                    {p.rectif >= 0 ? '+' : ''}{p.rectif.toFixed(3)} {p.unit || ''}
-                  </td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.remainingStock.toFixed(3)} {p.unit || ''}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.purchaseValue.toLocaleString()}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right' }}>{p.salesValue.toLocaleString()}</td>
-                  <td style={{ border: '1px solid #e5e7eb', padding: 5, textAlign: 'right', color: p.margin >= 0 ? '#059669' : '#DC2626' }}>
-                    {p.margin >= 0 ? '+' : ''}{p.margin.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-
- {/* Ventes mensuelles – taille fixe */}
-        <section className="pdf-section" style={{ padding: '8px 14px 0' }}>
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Ventes Mensuelles {selectedYear}</div>
-            <div style={{ width: 700, height: 600, margin: '0 auto', overflow: 'hidden' }}>
-              <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
-            </div>
-          </div>
-        </section>
-
-
-        
-      </div>
-      {/* ========= /Rapport ========= */}
-
       {/* Header + Export */}
       <div className="flex justify-between items-center">
         <div>
