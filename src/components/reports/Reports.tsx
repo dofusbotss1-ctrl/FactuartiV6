@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BarChart3, TrendingUp, AlertTriangle, DollarSign, Calendar, Download } from 'lucide-react';
+import { BarChart3, TrendingUp, AlertTriangle, DollarSign, Calendar, Download,Crown } from 'lucide-react';
 import { useData } from '../../contexts/DataContext';
 import { useAuth } from '../../contexts/AuthContext';
 import FinancialAlerts from './FinancialAlerts';
@@ -233,8 +233,11 @@ const Reports: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center space-x-2">
             <BarChart3 className="w-8 h-8 text-green-600" />
             <span>Gestion Financière</span>
-            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-bold">PRO</span>
+            <Crown className="w-6 h-6 text-yellow-500" />
           </h1>
+
+
+          
           <p className="text-gray-600 dark:text-gray-300">Analyses financières complètes et KPIs de performance</p>
         </div>
         
