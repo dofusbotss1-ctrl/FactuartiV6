@@ -391,7 +391,7 @@ export default function StockManagement() {
               </div>
             </div>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
-              <div style={{ fontWeight: 400, marginBottom: 4, fontSize: 11 }}>Valeur du Stock Restant</div>
+              <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Valeur du Stock Restant</div>
               <div style={{ width: 340, height: 380, margin: '0 auto' }}>
                 <DonutChart data={stockDonutData} title="" subtitle="" centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`} centerLabel="MAD Stock" />
               </div>
@@ -404,7 +404,7 @@ export default function StockManagement() {
         <section className="pdf-section" style={{ padding: '8px 14px 0' }}>
           <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
             <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Ventes Mensuelles {selectedYear}</div>
-            <div style={{ width: 700, height: 150, margin: '0 auto', overflow: 'hidden' }}>
+            <div style={{ width: 700, height: 550, margin: '0 auto', overflow: 'hidden' }}>
               <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
             </div>
           </div>
