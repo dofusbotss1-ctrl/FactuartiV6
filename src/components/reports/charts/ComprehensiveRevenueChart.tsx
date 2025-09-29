@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts';
 import { TrendingUp, FileText, ShoppingCart, DollarSign, BarChart3 } from 'lucide-react';
+import { useData } from '../../../contexts/DataContext';
 
 interface ComprehensiveRevenueData {
   month: string;
@@ -14,9 +15,26 @@ interface ComprehensiveRevenueChartProps {
 }
 
 export default function ComprehensiveRevenueChart({ data }: ComprehensiveRevenueChartProps) {
+  const { invoices } = useData();
   const [chartType, setChartType] = useState<'area' | 'bar'>('area');
   const [viewMode, setViewMode] = useState<'stacked' | 'separate'>('stacked');
   
+  // Fonction pour vérifier si une commande société a déjà une facture
+  const hasInvoiceForOrder = (orderId: string) => {
+    return invoices.some(invoice => invoice.orderId === orderId);
+  };
+
+  // Recalculer les données pour éviter les doublons
+  const optimizedData = data.map(item => {
+    // Les revenus des factures restent inchangés
+    // Les revenus des commandes doivent être recalculés pour exclure celles avec factures
+    return {
+      ...item,
+      // Note: Le calcul optimisé sera fait dans le composant parent
+      // Ici on affiche les données telles qu'elles arrivent
+    };
+  });
+
   const totalInvoiceRevenue = data.reduce((sum, item) => sum + item.invoices, 0);
   const totalOrderRevenue = data.reduce((sum, item) => sum + item.orders, 0);
   const totalRevenue = totalInvoiceRevenue + totalOrderRevenue;
