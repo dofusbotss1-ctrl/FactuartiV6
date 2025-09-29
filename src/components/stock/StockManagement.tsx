@@ -344,27 +344,26 @@ export default function StockManagement() {
     background: '#ffffff'
   }}
 >
-  {/* Header */}
-  <section className="pdf-section" style={{ padding: 16, borderBottom: '2px solid #6366F1' /* indigo-500 */ }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-      {logoUrl ? (
-        <img
-          src={logoUrl}
-          alt="logo"
-          crossOrigin="anonymous"
-          style={{ width: 44, height: 44, objectFit: 'contain' }}
-        />
-      ) : null}
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 18, color: '#4F46E5', fontWeight: 800, letterSpacing: 0.2 }}>
-          RAPPORT DE GESTION DE STOCK — AVANCÉ
+   {/* ===== Header pro ===== */}
+  <section className="pdf-reset" style={{ padding: 14, borderBottom: '2px solid #6366F1' }}>
+    <div style={{ display:'grid', gridTemplateColumns:'140px 1fr 180px', alignItems:'center', gap:12 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        {logoUrl ? (
+          <img src={logoUrl} alt="logo" crossOrigin="anonymous" style={{ width:44, height:44, objectFit:'contain' }}/>
+        ) : null}
+        <div style={{ fontSize:12, fontWeight:700 }}>{user?.company?.name || ''}</div>
+      </div>
+
+      <div style={{ textAlign:'center' }}>
+        <div className="pdf-title">RAPPORT DE GESTION DE STOCK — AVANCÉ</div>
+        <div className="pdf-sub" style={{ fontSize:10, marginTop:2 }}>
+          Synthèse opérationnelle & analyse financière
         </div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>
-          {user?.company?.name || ''}
-        </div>
-        <div style={{ fontSize: 10, marginTop: 3, color: '#475569' }}>
-          Généré le {new Date().toLocaleDateString('fr-FR')}
-        </div>
+      </div>
+
+      <div className="pdf-meta">
+        <div>Généré le {new Date().toLocaleDateString('fr-FR')}</div>
+        {selectedYear ? <div>Période&nbsp;: {selectedYear}</div> : null}
       </div>
     </div>
   </section>
@@ -558,17 +557,6 @@ export default function StockManagement() {
     </table>
   </section>
 
-  {/* Ventes mensuelles — taille réduite */}
-  <section className="pdf-section" style={{ padding: '8px 16px 10px' }}>
-    <div style={{ background: '#ffffff', border: '1px solid #E5E7EB', borderRadius: 8, padding: 10 }}>
-      <div style={{ fontWeight: 800, marginBottom: 6, fontSize: 11, color: '#111827' }}>
-        Ventes mensuelles {selectedYear}
-      </div>
-      <div style={{ width: 640, height: 600, margin: '0 auto', overflow: 'hidden' }}>
-        <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
-      </div>
-    </div>
-  </section>
 
   {/* Footer */}
   <section className="pdf-section" style={{ padding: 12, borderTop: '1px solid #E5E7EB', textAlign: 'center' }}>
