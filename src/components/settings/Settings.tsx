@@ -888,9 +888,7 @@ export default function Settings() {
                 <Palette className="w-6 h-6 text-white" />
               </div>
              
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                Interface adaptée aux standards locaux avec support complet de l'arabe
-              </p>
+             
               <div className="text-2xl">🇲🇦</div>
             </div>
           </div>
