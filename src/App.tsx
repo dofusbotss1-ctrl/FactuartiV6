@@ -37,7 +37,6 @@ import StockManagement from './components/stock/StockManagement';
 import HRManagement from './components/hr/HRManagement';
 import SupplierManagement from './components/suppliers/SupplierManagement';
 import SuppliersSection from './components/suppliers/SuppliersSection';
-import ProjectManagement from './components/projects/ProjectManagement';
 import OrdersList from './components/orders/OrdersList';
 import CreateOrder from './components/orders/CreateOrder';
 import OrderDetail from './components/orders/OrderDetail';
@@ -183,7 +182,6 @@ function AppContent() {
             <Route path="/stock-management" element={<StockManagement />} />
             <Route path="/supplier-management" element={<SupplierManagement />} />
             <Route path="/hr-management" element={<HRManagement />} />
-            <Route path="/project-management" element={<ProjectManagement />} />
             <Route path="/commandes" element={<OrdersList />} />
             <Route path="/commandes/nouveau" element={<CreateOrder />} />
             <Route path="/commandes/:id" element={<OrderDetail />} />
