@@ -692,7 +692,23 @@ export default function Settings() {
           </div>
 
           {/* Divers */}
-       
+         
+
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="rounded border-gray-300 dark:border-gray-600 text-teal-600 focus:ring-teal-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Envoyer automatiquement les factures par email
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Quick Actions / Right column */}
         <div className="space-y-6">
