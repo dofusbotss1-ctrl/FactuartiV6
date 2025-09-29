@@ -883,7 +883,6 @@ export default function Settings() {
           </div>
 
          
-      </div>
 
       {/* Modal d'aide pour la signature */}
       {showSignatureModal && (
