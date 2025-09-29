@@ -1,5 +1,6 @@
 import React from 'react';
 import { Invoice } from '../../contexts/DataContext';
+import { useOrder } from '../../contexts/OrderContext';
 import { Target, Percent, Clock, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 
@@ -8,6 +9,30 @@ interface FinancialKPIsProps {
 }
 
 export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
+  const { orders } = useOrder();
+
+  // Fonction pour vérifier si une commande société a déjà une facture
+  const hasInvoiceForOrder = (orderId: string) => {
+    return invoices.some(invoice => invoice.orderId === orderId);
+  };
+
+  // Calculer le CA des commandes (sans doublons avec les factures)
+  const calculateOrderRevenue = () => {
+    return orders
+      .filter(order => {
+        // Inclure toutes les commandes particuliers livrées
+        if (order.clientType === 'personne_physique' && order.status === 'livre') {
+          return true;
+        }
+        // Inclure seulement les commandes sociétés livrées qui n'ont PAS de facture
+        if (order.clientType === 'societe' && order.status === 'livre') {
+          return !hasInvoiceForOrder(order.id);
+        }
+        return false;
+      })
+      .reduce((sum, order) => sum + order.totalTTC, 0);
+  };
+
   // Calcul du DSO (Days Sales Outstanding)
   const calculateDSO = () => {
     const paidInvoices = invoices.filter(inv => inv.status === 'paid' && inv.dueDate);
@@ -37,7 +62,8 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
-    const currentMonthRevenue = invoices
+    // Revenus factures du mois actuel
+    const currentMonthInvoiceRevenue = invoices
       .filter(inv => {
         const invDate = parseISO(inv.date);
         return invDate.getMonth() === currentMonth && 
@@ -46,16 +72,52 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
       })
       .reduce((sum, inv) => sum + inv.totalTTC, 0);
     
-    const previousMonthRevenue = invoices
+    // Revenus commandes du mois actuel (sans doublons)
+    const currentMonthOrderRevenue = orders
+      .filter(order => {
+        const orderDate = parseISO(order.orderDate);
+        const isCurrentMonth = orderDate.getMonth() === currentMonth && 
+                              orderDate.getFullYear() === currentYear &&
+                              order.status === 'livre';
+        
+        if (!isCurrentMonth) return false;
+        
+        // Inclure particuliers ou sociétés sans facture
+        return order.clientType === 'personne_physique' || 
+               (order.clientType === 'societe' && !hasInvoiceForOrder(order.id));
+      })
+      .reduce((sum, order) => sum + order.totalTTC, 0);
+
+    const currentMonthRevenue = currentMonthInvoiceRevenue + currentMonthOrderRevenue;
+    
+    // Même logique pour le mois précédent
+    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    
+    const previousMonthInvoiceRevenue = invoices
       .filter(inv => {
         const invDate = parseISO(inv.date);
-        const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-        const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
         return invDate.getMonth() === prevMonth && 
                invDate.getFullYear() === prevYear &&
                (inv.status === 'paid' || inv.status === 'collected');
       })
       .reduce((sum, inv) => sum + inv.totalTTC, 0);
+    
+    const previousMonthOrderRevenue = orders
+      .filter(order => {
+        const orderDate = parseISO(order.orderDate);
+        const isPrevMonth = orderDate.getMonth() === prevMonth && 
+                           orderDate.getFullYear() === prevYear &&
+                           order.status === 'livre';
+        
+        if (!isPrevMonth) return false;
+        
+        return order.clientType === 'personne_physique' || 
+               (order.clientType === 'societe' && !hasInvoiceForOrder(order.id));
+      })
+      .reduce((sum, order) => sum + order.totalTTC, 0);
+
+    const previousMonthRevenue = previousMonthInvoiceRevenue + previousMonthOrderRevenue;
     
     return previousMonthRevenue > 0 ? 
       ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100 : 0;
@@ -64,21 +126,60 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
   // Calcul du panier moyen
   const calculateAverageBasket = () => {
     const paidInvoices = invoices.filter(inv => inv.status === 'paid' || inv.status === 'collected');
-    if (paidInvoices.length === 0) return 0;
+    const relevantOrders = orders.filter(order => {
+      if (order.status !== 'livre') return false;
+      return order.clientType === 'personne_physique' || 
+             (order.clientType === 'societe' && !hasInvoiceForOrder(order.id));
+    });
     
-    const totalRevenue = paidInvoices.reduce((sum, inv) => sum + inv.totalTTC, 0);
-    return totalRevenue / paidInvoices.length;
+    const totalTransactions = paidInvoices.length + relevantOrders.length;
+    if (totalTransactions === 0) return 0;
+    
+    const invoiceRevenue = paidInvoices.reduce((sum, inv) => sum + inv.totalTTC, 0);
+    const orderRevenue = relevantOrders.reduce((sum, order) => sum + order.totalTTC, 0);
+    const totalRevenue = invoiceRevenue + orderRevenue;
+    
+    return totalRevenue / totalTransactions;
   };
 
   // Calcul de la marge brute
   const calculateGrossMargin = () => {
-    // Estimation basée sur les prix de vente vs prix d'achat des produits
-    const totalSales = invoices
+    // Calcul basé sur les factures payées + commandes livrées (sans doublons)
+    const invoiceSales = invoices
       .filter(inv => inv.status === 'paid' || inv.status === 'collected')
       .reduce((sum, inv) => sum + inv.totalTTC, 0);
     
+    // Commandes sans doublons avec les factures
+    const orderSales = orders
+      .filter(order => {
+        if (order.status !== 'livre') return false;
+        return order.clientType === 'personne_physique' || 
+               (order.clientType === 'societe' && !hasInvoiceForOrder(order.id));
+      })
+      .reduce((sum, order) => sum + order.totalTTC, 0);
+    
+    const totalSales = invoiceSales + orderSales;
+    
     // Estimation de la marge à 30% (à ajuster selon vos données réelles)
     return totalSales * 0.3;
+  };
+
+  // Calcul du chiffre d'affaires total (factures + commandes)
+  const calculateTotalRevenue = () => {
+    const invoiceRevenue = invoices
+      .filter(inv => inv.status === 'paid' || inv.status === 'collected')
+      .reduce((sum, inv) => sum + inv.totalTTC, 0);
+    
+    // Commandes sans doublons
+    const orderRevenue = orders
+      .filter(order => {
+        if (order.status !== 'livre') return false;
+        return order.clientType === 'personne_physique' || 
+               (order.clientType === 'societe' && !hasInvoiceForOrder(order.id));
+      })
+      .reduce((sum, order) => sum + order.totalTTC, 0);
+    
+    return { invoiceRevenue, orderRevenue, total: invoiceRevenue + orderRevenue };
   };
 
   const dso = calculateDSO();
@@ -86,6 +187,7 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
   const growthRate = calculateGrowthRate();
   const averageBasket = calculateAverageBasket();
   const grossMargin = calculateGrossMargin();
+  const totalRevenue = calculateTotalRevenue();
 
   const kpis = [
     {
@@ -132,6 +234,15 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
       color: grossMargin > 0 ? 'text-green-600' : 'text-red-600',
       bgColor: grossMargin > 0 ? 'from-green-500 to-emerald-600' : 'from-red-500 to-red-600',
       trend: grossMargin > 0 ? 'Positif' : 'Négatif'
+    },
+    {
+      title: 'CA Total',
+      subtitle: 'Factures + Commandes',
+      value: `${totalRevenue.total.toLocaleString()} MAD`,
+      icon: DollarSign,
+      color: 'text-purple-600',
+      bgColor: 'from-purple-500 to-indigo-600',
+      trend: 'Global'
     }
   ];
 
@@ -181,6 +292,8 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
             <p>• DSO {dso <= 30 ? 'excellent' : dso <= 45 ? 'correct' : 'à améliorer'}</p>
             <p>• Recouvrement {recoveryRate >= 80 ? 'très bon' : recoveryRate >= 60 ? 'moyen' : 'faible'}</p>
             <p>• Croissance {growthRate > 0 ? 'positive' : growthRate < 0 ? 'négative' : 'stable'}</p>
+            <p>• CA Factures: {totalRevenue.invoiceRevenue.toLocaleString()} MAD</p>
+            <p>• CA Commandes: {totalRevenue.orderRevenue.toLocaleString()} MAD</p>
           </div>
         </div>
         
@@ -190,6 +303,7 @@ export default function FinancialKPIs({ invoices }: FinancialKPIsProps) {
             <p>• DSO cible: ≤ 30 jours</p>
             <p>• Taux recouvrement: ≥ 85%</p>
             <p>• Croissance mensuelle: ≥ 5%</p>
+            <p>• Équilibre Factures/Commandes optimal</p>
           </div>
         </div>
       </div>
