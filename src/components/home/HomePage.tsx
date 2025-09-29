@@ -652,11 +652,11 @@ export default function HomePage() {
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2 text-gray-400">
                   <Phone className="w-4 h-4" />
-                  <span>+212 522 123 456</span>
+                  <span>+212 666 736 446</span>
                 </div>
                 <div className="flex items-center space-x-2 text-gray-400">
                   <Mail className="w-4 h-4" />
-                  <span>contact@Factourati.ma</span>
+                  <span>contact@Factourati.com</span>
                 </div>
               </div>
             </div>
@@ -683,7 +683,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <Mail className="w-4 h-4" />
-                  <span>contact@Factourati.ma</span>
+                  <span>contact@Factourati.com</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Phone className="w-4 h-4" />
