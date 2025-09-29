@@ -310,13 +310,20 @@ export default function StockManagement() {
 
   return (
     <div className="space-y-6">
-    {/* ========= Rapport (caché) – NOUVELLE VERSION ========= */}
+ {/* ========= Rapport (caché) – VERSION OK GRAPHS ========= */}
 <div
   ref={reportRef}
-  style={{ display: 'none', fontFamily: 'Arial, ui-sans-serif, system-ui', fontSize: 12, lineHeight: 1.4, color: '#111' }}
+  style={{
+    display: 'none',
+    fontFamily: 'Arial, ui-sans-serif, system-ui',
+    fontSize: 12,
+    lineHeight: 1.4,
+    color: '#111',
+    background: '#fff'
+  }}
 >
   {/* Header avec logo */}
-  <section className="pdf-section" style={{ padding: 16, borderBottom: '2px solid #8B5CF6' }}>
+  <section className="pdf-section" style={{ padding: 14, borderBottom: '2px solid #8B5CF6' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
       {logoUrl ? (
         <img
@@ -336,8 +343,8 @@ export default function StockManagement() {
     </div>
   </section>
 
-  {/* KPIs (avec unité si produit sélectionné) */}
-  <section className="pdf-section" style={{ padding: '10px 16px' }}>
+  {/* KPIs */}
+  <section className="pdf-section" style={{ padding: '8px 14px' }}>
     <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Statistiques Globales</div>
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
       <tbody>
@@ -387,46 +394,59 @@ export default function StockManagement() {
     </table>
   </section>
 
-  {/* Donuts – taille réduite */}
-  <section className="pdf-section" style={{ padding: '0 16px' }}>
+  {/* Donuts – tailles FIXES (petites) */}
+  <section className="pdf-section" style={{ padding: '0 14px' }}>
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
       <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
         <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Répartition des Ventes</div>
-        <div style={{ width: '100%', height: 150, transform: 'translateZ(0)' }}>
-          <DonutChart data={salesDonutData} title="" subtitle="" centerValue={`${stats.totalSalesValue.toLocaleString()}`} centerLabel="MAD Total" />
+        {/* largeur/hauteur explicites = pas de zoom */}
+        <div style={{ width: 340, height: 140, margin: '0 auto' }}>
+          <DonutChart
+            data={salesDonutData}
+            title=""
+            subtitle=""
+            centerValue={`${stats.totalSalesValue.toLocaleString()}`}
+            centerLabel="MAD Total"
+          />
         </div>
       </div>
       <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
         <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Valeur du Stock Restant</div>
-        <div style={{ width: '100%', height: 150, transform: 'translateZ(0)' }}>
-          <DonutChart data={stockDonutData} title="" subtitle="" centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`} centerLabel="MAD Stock" />
+        <div style={{ width: 340, height: 140, margin: '0 auto' }}>
+          <DonutChart
+            data={stockDonutData}
+            title=""
+            subtitle=""
+            centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`}
+            centerLabel="MAD Stock"
+          />
         </div>
       </div>
     </div>
   </section>
 
-  {/* Marges – taille réduite */}
-  <section className="pdf-section" style={{ padding: '8px 16px 0' }}>
+  {/* Marges – taille FIXE */}
+  <section className="pdf-section" style={{ padding: '8px 14px 0' }}>
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
       <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Marge Brute par Produit</div>
-      <div style={{ width: '100%', height: 160, transform: 'translateZ(0)' }}>
+      <div style={{ width: 700, height: 150, margin: '0 auto' }}>
         <MarginChart data={marginData} />
       </div>
     </div>
   </section>
 
-  {/* Ventes mensuelles – taille réduite */}
-  <section className="pdf-section" style={{ padding: '8px 16px 0' }}>
+  {/* Ventes mensuelles – taille FIXE */}
+  <section className="pdf-section" style={{ padding: '8px 14px 0' }}>
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 8 }}>
       <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>Ventes Mensuelles {selectedYear}</div>
-      <div style={{ width: '100%', height: 165, transform: 'translateZ(0)', overflow: 'hidden' }}>
+      <div style={{ width: 700, height: 150, margin: '0 auto', overflow: 'hidden' }}>
         <MonthlySalesChart data={monthlySalesData} selectedYear={selectedYear} />
       </div>
     </div>
   </section>
 
   {/* Tableau détaillé */}
-  <section className="pdf-section" style={{ padding: '8px 16px 14px' }}>
+  <section className="pdf-section" style={{ padding: '8px 14px 12px' }}>
     <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Analyse détaillée par produit</div>
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
       <thead>
