@@ -448,39 +448,6 @@ export default function StockManagement() {
     </div>
   </section>
 
-  {/* Donuts — taille réduite et équilibrée */}
-  <section className="pdf-section" style={{ padding: '8px 16px' }}>
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-      <div style={{ background: '#ffffff', border: '1px solid #E5E7EB', borderRadius: 8, padding: 10 }}>
-        <div style={{ fontWeight: 800, marginBottom: 6, fontSize: 11, color: '#111827' }}>
-          Répartition des ventes
-        </div>
-        <div style={{ width: 360, height: 360, margin: '0 auto' }}>
-          <DonutChart
-            data={salesDonutData}
-            title=""
-            subtitle=""
-            centerValue={`${stats.totalSalesValue.toLocaleString()}`}
-            centerLabel="MAD Total"
-          />
-        </div>
-      </div>
-      <div style={{ background: '#ffffff', border: '1px solid #E5E7EB', borderRadius: 8, padding: 10 }}>
-        <div style={{ fontWeight: 800, marginBottom: 6, fontSize: 11, color: '#111827' }}>
-          Valeur du stock restant
-        </div>
-        <div style={{ width: 360, height: 360, margin: '0 auto' }}>
-          <DonutChart
-            data={stockDonutData}
-            title=""
-            subtitle=""
-            centerValue={`${stockDonutData.reduce((s, i) => s + i.value, 0).toLocaleString()}`}
-            centerLabel="MAD Stock"
-          />
-        </div>
-      </div>
-    </div>
-  </section>
 
   {/* Tableau détaillé — zébré + en-tête contrastée */}
   <section className="pdf-section" style={{ padding: '8px 16px 12px' }}>
