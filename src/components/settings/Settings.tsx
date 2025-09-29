@@ -882,14 +882,7 @@ export default function Settings() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-teal-50 to-blue-50 dark:from-teal-900/20 dark:to-blue-900/20 rounded-xl border border-teal-200 dark:border-teal-700 p-6">
-            <div className="text-center">
-              
-             
-             
-           
-            </div>
-          </div>
+         
         </div>
       </div>
       
