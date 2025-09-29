@@ -388,10 +388,10 @@ export default function StockManagement() {
         </section>
 
         {/* Donuts (taille réduite) */}
-        <section className="pdf-section" style={{ padding: '0 50px' }}>
+        <section className="pdf-section" style={{ padding: '0 20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Répartition des Ventes</div>
+              <div style={{ fontWeight: 1000, marginBottom: 6 }}>Répartition des Ventes</div>
               <div style={{ width: '100%', height: 170, transform: 'translateZ(0)' }}>
                 <DonutChart data={salesDonutData} title="" subtitle="" centerValue={`${stats.totalSalesValue.toLocaleString()}`} centerLabel="MAD Total" />
               </div>
