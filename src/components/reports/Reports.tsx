@@ -148,12 +148,29 @@ const Reports: React.FC = () => {
     
     const currentYear = new Date().getFullYear();
     
+    // Fonction pour vérifier si une commande société a déjà une facture
+    const hasInvoiceForOrder = (orderId: string) => {
+      return invoices.some(invoice => invoice.orderId === orderId);
+    };
+    
     return months.map((month, index) => {
       const monthOrders = orders.filter(order => {
         const orderDate = new Date(order.orderDate);
-        return orderDate.getMonth() === index && 
-               orderDate.getFullYear() === currentYear &&
-               order.status === 'livre';
+        const isCurrentMonth = orderDate.getMonth() === index && 
+                              orderDate.getFullYear() === currentYear &&
+                              order.status === 'livre';
+        
+        if (!isCurrentMonth) return false;
+        
+        // Inclure toutes les commandes particuliers
+        if (order.clientType === 'personne_physique') return true;
+        
+        // Inclure seulement les commandes sociétés qui n'ont PAS de facture
+        if (order.clientType === 'societe') {
+          return !hasInvoiceForOrder(order.id);
+        }
+        
+        return false;
       });
       
       const totalRevenue = monthOrders.reduce((sum, order) => sum + order.totalTTC, 0);
@@ -176,6 +193,11 @@ const Reports: React.FC = () => {
 
   // Analyse par type de client
   const clientTypeAnalysis = useMemo(() => {
+    // Fonction pour vérifier si une commande société a déjà une facture
+    const hasInvoiceForOrder = (orderId: string) => {
+      return invoices.some(invoice => invoice.orderId === orderId);
+    };
+
     const invoiceStats = {
       societes: {
         count: invoices.filter(inv => inv.client && clients.find(c => c.id === inv.clientId)).length,
@@ -191,9 +213,17 @@ const Reports: React.FC = () => {
     
     const orderStats = {
       societes: {
-        count: orders.filter(order => order.clientType === 'societe' && order.status === 'livre').length,
+        count: orders.filter(order => 
+          order.clientType === 'societe' && 
+          order.status === 'livre' && 
+          !hasInvoiceForOrder(order.id)
+        ).length,
         revenue: orders
-          .filter(order => order.clientType === 'societe' && order.status === 'livre')
+          .filter(order => 
+            order.clientType === 'societe' && 
+            order.status === 'livre' && 
+            !hasInvoiceForOrder(order.id)
+          )
           .reduce((sum, order) => sum + order.totalTTC, 0)
       },
       particuliers: {
@@ -229,6 +259,11 @@ const Reports: React.FC = () => {
     
     const currentYear = new Date().getFullYear();
     
+    // Fonction pour vérifier si une commande société a déjà une facture
+    const hasInvoiceForOrder = (orderId: string) => {
+      return invoices.some(invoice => invoice.orderId === orderId);
+    };
+    
     return months.map((month, index) => {
       // Revenus des factures
       const invoiceRevenue = invoices
@@ -240,13 +275,25 @@ const Reports: React.FC = () => {
         })
         .reduce((sum, invoice) => sum + invoice.totalTTC, 0);
       
-      // Revenus des commandes
+      // Revenus des commandes (sans doublons avec les factures)
       const orderRevenue = orders
         .filter(order => {
           const orderDate = new Date(order.orderDate);
-          return orderDate.getMonth() === index && 
-                 orderDate.getFullYear() === currentYear &&
-                 order.status === 'livre';
+          const isCurrentMonth = orderDate.getMonth() === index && 
+                                 orderDate.getFullYear() === currentYear &&
+                                 order.status === 'livre';
+          
+          if (!isCurrentMonth) return false;
+          
+          // Inclure toutes les commandes particuliers
+          if (order.clientType === 'personne_physique') return true;
+          
+          // Inclure seulement les commandes sociétés qui n'ont PAS de facture
+          if (order.clientType === 'societe') {
+            return !hasInvoiceForOrder(order.id);
+          }
+          
+          return false;
         })
         .reduce((sum, order) => sum + order.totalTTC, 0);
       
@@ -384,6 +431,21 @@ const Reports: React.FC = () => {
 
       {/* KPIs Financiers */}
       <FinancialKPIs invoices={invoices || []} orders={orders || []} />
+      <FinancialKPIs invoices={invoices || []} />
+
+      {/* Information sur l'optimisation */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+        <div className="flex items-center space-x-2 mb-2">
+          <TrendingUp className="w-5 h-5 text-blue-600" />
+          <h4 className="font-medium text-blue-900 dark:text-blue-100">📊 Calculs Optimisés</h4>
+        </div>
+        <p className="text-sm text-blue-800 dark:text-blue-200">
+          Les calculs financiers évitent maintenant les doublons : 
+          <strong> Factures payées</strong> + <strong>Commandes particuliers livrées</strong> + 
+          <strong>Commandes sociétés livrées (sans facture créée)</strong>.
+          Cela garantit un chiffre d'affaires précis sans compter deux fois les mêmes ventes.
+        </p>
+      </div>
 
       {/* Statistiques globales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -396,7 +458,7 @@ const Reports: React.FC = () => {
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {clientTypeAnalysis.invoices.societes.revenue.toLocaleString()}
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Factures Sociétés</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Factures (Sociétés)</p>
             </div>
           </div>
         </div>
@@ -410,7 +472,7 @@ const Reports: React.FC = () => {
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {clientTypeAnalysis.orders.societes.revenue.toLocaleString()}
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Commandes Sociétés</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Commandes Sociétés (sans facture)</p>
             </div>
           </div>
         </div>
@@ -438,7 +500,7 @@ const Reports: React.FC = () => {
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {(clientTypeAnalysis.combined.societes.revenue + clientTypeAnalysis.combined.particuliers.revenue).toLocaleString()}
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Total Combiné</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">MAD Total (sans doublons)</p>
             </div>
           </div>
         </div>
