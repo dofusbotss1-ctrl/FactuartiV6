@@ -15,6 +15,8 @@ import {
 import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { ManagedUser } from './UserManagementContext';
+import { supabase } from '../utils/supabaseClient';
+import { checkCompanyNameAvailability } from '../utils/companyValidation';
 
 interface Company {
   name: string;
@@ -341,14 +343,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string, companyData: Company): Promise<boolean> => {
     try {
+      const nameCheck = await checkCompanyNameAvailability(companyData.name);
+      if (!nameCheck.isAvailable) {
+        console.error('Company name already exists:', nameCheck.error);
+        throw new Error('COMPANY_NAME_EXISTS');
+      }
+
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
-      // envoyer la vérification avec redirection personnalisée
       auth.languageCode = 'fr';
       await fbSendEmailVerification(userCredential.user, getActionCodeSettings());
 
-      // 1 mois pro offert
       const now = new Date();
       const expiry = new Date(now);
       expiry.setMonth(expiry.getMonth() + 1);
@@ -366,11 +372,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verificationEmailSentAt: now.toISOString(),
       });
 
+      const { error: supabaseError } = await supabase
+        .from('entreprises')
+        .insert({
+          id: userId,
+          name: companyData.name,
+          ice: companyData.ice,
+          if_number: companyData.if,
+          rc: companyData.rc,
+          cnss: companyData.cnss,
+          address: companyData.address,
+          phone: companyData.phone,
+          email: companyData.email,
+          patente: companyData.patente,
+          website: companyData.website || '',
+          logo: companyData.logo || '',
+          signature: companyData.signature || '',
+          owner_name: email.split('@')[0],
+          owner_email: email,
+          email_verified: false,
+          subscription: 'pro',
+          subscription_date: now.toISOString(),
+          expiry_date: expiry.toISOString(),
+          invoice_numbering_format: companyData.invoiceNumberingFormat || '',
+          invoice_prefix: companyData.invoicePrefix || '',
+          invoice_counter: companyData.invoiceCounter || 0,
+          last_invoice_year: companyData.lastInvoiceYear || null,
+          default_template: companyData.defaultTemplate || 'template1',
+          verification_email_sent_at: now.toISOString()
+        });
+
+      if (supabaseError) {
+        console.error('Error inserting into Supabase:', supabaseError);
+      }
+
       try { localStorage.setItem('welcomeProPending', '1'); } catch {}
 
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erreur lors de l'inscription:", error);
+      if (error?.message === 'COMPANY_NAME_EXISTS') {
+        throw error;
+      }
       return false;
     }
   };

@@ -11,10 +11,12 @@ import {
   AlertCircle,
   CheckCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  XCircle
 } from 'lucide-react';
 import { sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { auth } from '../../config/firebase';
+import { checkCompanyNameAvailability, debounce } from '../../utils/companyValidation';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -270,6 +272,8 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   const [isLoading, setIsLoading] = useState(false);
   const [bannerError, setBannerError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
+  const [isCheckingCompanyName, setIsCheckingCompanyName] = useState(false);
+  const [companyNameStatus, setCompanyNameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
 
   // erreurs par champ
   type FE = Partial<Record<
@@ -315,7 +319,39 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   const onField = (name: keyof typeof formData, v: string) => {
     setFormData((s) => ({ ...s, [name]: v }));
     if (fieldErrors[name]) setFieldErrors((e) => ({ ...e, [name]: undefined }));
+
+    if (name === 'companyName' && v.trim()) {
+      setCompanyNameStatus('idle');
+      debouncedCheckCompanyName(v);
+    }
   };
+
+  const checkCompanyName = async (name: string) => {
+    if (!name || !name.trim()) {
+      setCompanyNameStatus('idle');
+      return;
+    }
+
+    setIsCheckingCompanyName(true);
+    setCompanyNameStatus('checking');
+
+    const result = await checkCompanyNameAvailability(name);
+
+    setIsCheckingCompanyName(false);
+
+    if (result.isAvailable) {
+      setCompanyNameStatus('available');
+      setFieldErrors((e) => ({ ...e, companyName: undefined }));
+    } else {
+      setCompanyNameStatus('taken');
+      setFieldErrors((e) => ({ ...e, companyName: result.error }));
+    }
+  };
+
+  const debouncedCheckCompanyName = React.useMemo(
+    () => debounce(checkCompanyName, 800),
+    []
+  );
 
   const validateRegister = () => {
     const fe: FE = {};
@@ -333,6 +369,8 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
 
     // société
     if (!formData.companyName.trim()) fe.companyName = 'Nom de la société obligatoire.';
+    else if (companyNameStatus === 'taken') fe.companyName = 'Ce nom de société existe déjà.';
+    else if (companyNameStatus === 'checking') fe.companyName = 'Vérification en cours...';
     if (!formData.address.trim()) fe.address = 'Adresse obligatoire.';
     if (!formData.companyEmail.trim()) fe.companyEmail = "Email de l'entreprise obligatoire.";
     else if (!emailRegex.test(formData.companyEmail.trim())) fe.companyEmail = 'Email invalide.';
@@ -360,6 +398,14 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
       return;
     }
 
+    if (companyNameStatus !== 'available') {
+      const nameCheck = await checkCompanyNameAvailability(formData.companyName);
+      if (!nameCheck.isAvailable) {
+        setBannerError(nameCheck.error || 'Ce nom de société existe déjà.');
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const companyData = {
@@ -378,12 +424,18 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
 
       const ok = await register(formData.email.trim(), formData.password, companyData);
       if (ok) {
-  navigate(`/verify-email?email=${encodeURIComponent(formData.email.trim())}`, { replace: true });
+        navigate(`/verify-email?email=${encodeURIComponent(formData.email.trim())}`, { replace: true });
       } else {
         setBannerError('Erreur lors de la création du compte.');
       }
-    } catch {
-      setBannerError("Erreur lors de l'inscription.");
+    } catch (error: any) {
+      if (error?.message === 'COMPANY_NAME_EXISTS') {
+        setBannerError('Ce nom de société est déjà utilisé. Veuillez en choisir un autre.');
+        setFieldErrors((e) => ({ ...e, companyName: 'Ce nom existe déjà' }));
+        setCompanyNameStatus('taken');
+      } else {
+        setBannerError("Erreur lors de l'inscription.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -561,23 +613,48 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
               {/* Nom */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Nom de la société *</label>
-                <input
-                  type="text"
-                  name="companyName"
-                  value={formData.companyName}
-                  onChange={(e) => onField('companyName', e.target.value)}
-                  required
-                  aria-invalid={!!fieldErrors.companyName}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent
-                    ${
-                      fieldErrors.companyName
-                        ? 'border-red-300 focus:ring-red-400'
-                        : 'border-gray-300 focus:ring-teal-500'
-                    }`}
-                  placeholder="Nom de votre entreprise"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="companyName"
+                    value={formData.companyName}
+                    onChange={(e) => onField('companyName', e.target.value)}
+                    required
+                    aria-invalid={!!fieldErrors.companyName}
+                    className={`w-full px-3 py-2 pr-10 border rounded-lg focus:ring-2 focus:border-transparent
+                      ${
+                        fieldErrors.companyName
+                          ? 'border-red-300 focus:ring-red-400'
+                          : companyNameStatus === 'available'
+                          ? 'border-green-300 focus:ring-green-500'
+                          : 'border-gray-300 focus:ring-teal-500'
+                      }`}
+                    placeholder="Nom de votre entreprise"
+                  />
+                  {companyNameStatus === 'checking' && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-5 h-5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+                  {companyNameStatus === 'available' && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    </div>
+                  )}
+                  {companyNameStatus === 'taken' && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    </div>
+                  )}
+                </div>
                 {fieldErrors.companyName && (
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.companyName}</p>
+                )}
+                {companyNameStatus === 'available' && !fieldErrors.companyName && (
+                  <p className="mt-1 text-xs text-green-600 flex items-center">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Ce nom est disponible
+                  </p>
                 )}
               </div>
 
