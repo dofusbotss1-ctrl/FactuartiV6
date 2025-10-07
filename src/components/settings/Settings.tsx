@@ -18,8 +18,11 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth';
+import { collection, query, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 import TemplateSelector from '../templates/TemplateSelector';
 import EmailVerificationModal from '../auth/EmailVerificationModal';
+import { normalizeCompanyName } from '../../utils/companyNameUtils';
 
 export default function Settings() {
   const { user, firebaseUser, updateCompanySettings } = useAuth();
@@ -187,6 +190,31 @@ export default function Settings() {
       alert("Seuls les administrateurs peuvent modifier les informations de l'entreprise");
       return;
     }
+
+    // Vérifier si le nom de société a changé et s'il existe déjà
+    if (companyData.name.trim() !== user.company.name) {
+      try {
+        const normalizedNewName = normalizeCompanyName(companyData.name);
+        const companiesQuery = query(collection(db, 'entreprises'));
+        const snapshot = await getDocs(companiesQuery);
+
+        for (const doc of snapshot.docs) {
+          // Ignorer notre propre entreprise
+          if (doc.id === user.companyId) continue;
+
+          const existingName = doc.data().name;
+          if (normalizeCompanyName(existingName) === normalizedNewName) {
+            alert('Ce nom de société est déjà utilisé par une autre entreprise. Veuillez choisir un autre nom.');
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors de la vérification du nom de société:', error);
+        alert('Erreur lors de la vérification du nom de société');
+        return;
+      }
+    }
+
     setIsSavingCompany(true);
     try {
       await updateCompanySettings({
@@ -692,7 +720,34 @@ export default function Settings() {
           </div>
 
           {/* Divers */}
-         
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Conditions de paiement par défaut
+                </label>
+                <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                  <option>Paiement à 30 jours</option>
+                  <option>Paiement à 15 jours</option>
+                  <option>Paiement à 60 jours</option>
+                  <option>Paiement comptant</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="rounded border-gray-300 dark:border-gray-600 text-teal-600 focus:ring-teal-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Envoyer automatiquement les factures par email
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Quick Actions / Right column */}
@@ -882,10 +937,22 @@ export default function Settings() {
             </div>
           </div>
 
-         
+          <div className="bg-gradient-to-br from-teal-50 to-blue-50 dark:from-teal-900/20 dark:to-blue-900/20 rounded-xl border border-teal-200 dark:border-teal-700 p-6">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gradient-to-br from-teal-600 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Palette className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                Design Marocain
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                Interface adaptée aux standards locaux avec support complet de l'arabe
+              </p>
+              <div className="text-2xl">🇲🇦</div>
+            </div>
+          </div>
         </div>
       </div>
-      
 
       {/* Modal d'aide pour la signature */}
       {showSignatureModal && (

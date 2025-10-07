@@ -3,6 +3,9 @@ import React, { useState } from 'react';
 import { Link, useLocation,useNavigate  } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { collection, query, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { normalizeCompanyName } from '../../utils/companyNameUtils';
 import {
   Lock,
   Mail,
@@ -294,6 +297,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   // toggles mdp
   const [showPwd1, setShowPwd1] = useState(false);
   const [showPwd2, setShowPwd2] = useState(false);
+  const [isCheckingCompany, setIsCheckingCompany] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '', // email de connexion
@@ -315,6 +319,26 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   const onField = (name: keyof typeof formData, v: string) => {
     setFormData((s) => ({ ...s, [name]: v }));
     if (fieldErrors[name]) setFieldErrors((e) => ({ ...e, [name]: undefined }));
+  };
+
+  // Vérifier si le nom de société existe déjà
+  const checkCompanyNameExists = async (companyName: string): Promise<boolean> => {
+    try {
+      const normalizedName = normalizeCompanyName(companyName);
+      const companiesQuery = query(collection(db, 'entreprises'));
+      const snapshot = await getDocs(companiesQuery);
+
+      for (const doc of snapshot.docs) {
+        const existingName = doc.data().name;
+        if (normalizeCompanyName(existingName) === normalizedName) {
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Erreur lors de la vérification du nom de société:', error);
+      return false;
+    }
   };
 
   const validateRegister = () => {
@@ -351,12 +375,41 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     return Object.keys(fe).length === 0;
   };
 
+  const validateCompanyName = async () => {
+    if (!formData.companyName.trim()) {
+      setFieldErrors((e) => ({ ...e, companyName: 'Nom de la société obligatoire.' }));
+      return false;
+    }
+
+    setIsCheckingCompany(true);
+    try {
+      const exists = await checkCompanyNameExists(formData.companyName);
+      if (exists) {
+        setFieldErrors((e) => ({ 
+          ...e, 
+          companyName: 'Ce nom de société est déjà utilisé. Veuillez choisir un autre nom.' 
+        }));
+        return false;
+      }
+      return true;
+    } finally {
+      setIsCheckingCompany(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBannerError('');
 
     if (!validateRegister()) {
       setBannerError('Veuillez corriger les champs en rouge.');
+      return;
+    }
+
+    // Vérification spéciale du nom de société
+    const companyNameValid = await validateCompanyName();
+    if (!companyNameValid) {
+      setBannerError('Le nom de société est déjà utilisé ou invalide.');
       return;
     }
 
@@ -575,9 +628,23 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                         : 'border-gray-300 focus:ring-teal-500'
                     }`}
                   placeholder="Nom de votre entreprise"
+                  onBlur={async () => {
+                    if (formData.companyName.trim()) {
+                      await validateCompanyName();
+                    }
+                  }}
                 />
+                {isCheckingCompany && (
+                  <div className="mt-1 flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-teal-500 border-t-transparent"></div>
+                    <span className="text-xs text-teal-600">Vérification de la disponibilité...</span>
+                  </div>
+                )}
                 {fieldErrors.companyName && (
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.companyName}</p>
+                )}
+                {!fieldErrors.companyName && formData.companyName.trim() && !isCheckingCompany && (
+                  <p className="mt-1 text-xs text-green-600">✓ Nom de société disponible</p>
                 )}
               </div>
 
