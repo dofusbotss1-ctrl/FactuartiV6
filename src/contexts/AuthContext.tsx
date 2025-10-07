@@ -1,6 +1,4 @@
-// ==============================
-// src/contexts/AuthContext.tsx
-// ==============================
+// filepath: src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import {
   User as FirebaseUser,
@@ -15,6 +13,8 @@ import {
 import { doc, getDoc, setDoc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { ManagedUser } from './UserManagementContext';
+import { CASE_INSENSITIVE_COMPANY_NAMES } from '../config/app';
+import { normalizeCompanyName } from '../utils/text';
 
 interface Company {
   name: string;
@@ -37,6 +37,7 @@ interface Company {
   subscription?: 'free' | 'pro';
   subscriptionDate?: string;
   expiryDate?: string;
+  nameNormalized?: string; // WHY: unicité insensible à la casse
 }
 
 interface User {
@@ -95,7 +96,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const BASE_URL =
   import.meta.env.VITE_PUBLIC_BASE_URL ||
   'https://www.factourati.com/';
-
 
 const getActionCodeSettings = (): ActionCodeSettings => ({
   url: `${BASE_URL}/verify-email-success?mode=verifyEmail`,
@@ -197,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (userDoc.exists()) {
             const userData = userDoc.data();
 
-            // Synchroniser Firestore si l’email vient d’être vérifié
+            // Sync emailVerified si nécessaire
             if (fbUser.emailVerified && userData.emailVerified !== true) {
               try {
                 await updateDoc(doc(db, 'entreprises', fbUser.uid), {
@@ -237,7 +237,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 defaultTemplate: userData.defaultTemplate || 'template1',
                 subscription: userData.subscription || 'free',
                 subscriptionDate: userData.subscriptionDate,
-                expiryDate: userData.expiryDate
+                expiryDate: userData.expiryDate,
+                nameNormalized: userData.nameNormalized,
               }
             });
             setSubscriptionStatus(calculateSubscriptionStatus(userData));
@@ -278,7 +279,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             website: 'https://facturati.ma',
             subscription: 'pro',
             subscriptionDate: new Date().toISOString(),
-            expiryDate: new Date(2030, 11, 31).toISOString()
+            expiryDate: new Date(2030, 11, 31).toISOString(),
+            nameNormalized: normalizeCompanyName('Facturati Administration'),
           }
         });
         return true;
@@ -322,7 +324,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               defaultTemplate: companyData.defaultTemplate || 'template1',
               subscription: companyData.subscription || 'free',
               subscriptionDate: companyData.subscriptionDate,
-              expiryDate: companyData.expiryDate
+              expiryDate: companyData.expiryDate,
+              nameNormalized: companyData.nameNormalized,
             }
           });
           setSubscriptionStatus(status);
@@ -341,13 +344,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string, companyData: Company): Promise<boolean> => {
     try {
-      // Vérification finale du nom de société avant création
-      const companiesQuery = query(
-        collection(db, 'entreprises'),
-        where('name', '==', companyData.name.trim())
-      );
-      const existingCompanies = await getDocs(companiesQuery);
-      
+      // Vérification finale du nom de société avant création (respect du toggle)
+      const trimmedName = companyData.name.trim();
+      const normName = normalizeCompanyName(trimmedName);
+
+      const companiesQueryRef = CASE_INSENSITIVE_COMPANY_NAMES
+        ? query(collection(db, 'entreprises'), where('nameNormalized', '==', normName))
+        : query(collection(db, 'entreprises'), where('name', '==', trimmedName));
+
+      const existingCompanies = await getDocs(companiesQueryRef);
       if (!existingCompanies.empty) {
         console.error('Nom de société déjà utilisé:', companyData.name);
         return false;
@@ -356,7 +361,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
-      // envoyer la vérification avec redirection personnalisée
+      // Envoi de la vérif email avec redirection personnalisée
       auth.languageCode = 'fr';
       await fbSendEmailVerification(userCredential.user, getActionCodeSettings());
 
@@ -367,6 +372,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await setDoc(doc(db, 'entreprises', userId), {
         ...companyData,
+        name: trimmedName,
+        nameNormalized: normName, // écrit toujours pour uniformiser
         ownerEmail: email,
         ownerName: email.split('@')[0],
         emailVerified: false,
@@ -427,8 +434,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateCompanySettings = async (settings: Partial<Company>): Promise<void> => {
     if (!user) return;
     try {
-      await updateDoc(doc(db, 'entreprises', user.id), { ...settings, updatedAt: new Date().toISOString() });
-      setUser(prev => prev ? { ...prev, company: { ...prev.company, ...settings } } : prev);
+      const toWrite: Partial<Company> = { ...settings };
+      if (settings.name !== undefined) {
+        const trimmedName = settings.name.trim();
+        // WHY: maintenir nameNormalized en cohérence
+        toWrite.name = trimmedName;
+        toWrite.nameNormalized = normalizeCompanyName(trimmedName);
+      }
+      await updateDoc(doc(db, 'entreprises', user.id), { ...toWrite, updatedAt: new Date().toISOString() });
+      setUser(prev => prev ? { ...prev, company: { ...prev.company, ...toWrite } as Company } : prev);
     } catch (error) {
       console.error('Erreur update paramètres:', error);
       throw error;
