@@ -341,18 +341,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string, companyData: Company): Promise<boolean> => {
     try {
-      // Vérification finale du nom de société avant création
-      const companiesQuery = query(
-        collection(db, 'entreprises'),
-        where('name', '==', companyData.name.trim())
-      );
-      const existingCompanies = await getDocs(companiesQuery);
-      
-      if (!existingCompanies.empty) {
-        console.error('Nom de société déjà utilisé:', companyData.name);
-        return false;
-      }
-
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
@@ -488,4 +476,3 @@ export function useAuth() {
   if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
-

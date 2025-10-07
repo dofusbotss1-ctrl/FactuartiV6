@@ -11,7 +11,6 @@ import {
   AlertCircle,
   CheckCircle,
   Eye,
-  
   EyeOff
 } from 'lucide-react';
 import { sendPasswordResetEmail, signOut } from 'firebase/auth';
