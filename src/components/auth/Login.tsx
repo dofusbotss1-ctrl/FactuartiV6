@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import { Link, useLocation,useNavigate  } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { normalizeCompanyName } from '../../utils/companyNameUtils';
 import {
   Lock,
   Mail,
@@ -323,12 +324,17 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   // Vérifier si le nom de société existe déjà
   const checkCompanyNameExists = async (companyName: string): Promise<boolean> => {
     try {
-      const companiesQuery = query(
-        collection(db, 'entreprises'),
-        where('name', '==', companyName.trim())
-      );
+      const normalizedName = normalizeCompanyName(companyName);
+      const companiesQuery = query(collection(db, 'entreprises'));
       const snapshot = await getDocs(companiesQuery);
-      return !snapshot.empty;
+
+      for (const doc of snapshot.docs) {
+        const existingName = doc.data().name;
+        if (normalizeCompanyName(existingName) === normalizedName) {
+          return true;
+        }
+      }
+      return false;
     } catch (error) {
       console.error('Erreur lors de la vérification du nom de société:', error);
       return false;

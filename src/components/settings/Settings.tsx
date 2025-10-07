@@ -18,8 +18,11 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth';
+import { collection, query, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 import TemplateSelector from '../templates/TemplateSelector';
 import EmailVerificationModal from '../auth/EmailVerificationModal';
+import { normalizeCompanyName } from '../../utils/companyNameUtils';
 
 export default function Settings() {
   const { user, firebaseUser, updateCompanySettings } = useAuth();
@@ -187,6 +190,31 @@ export default function Settings() {
       alert("Seuls les administrateurs peuvent modifier les informations de l'entreprise");
       return;
     }
+
+    // Vérifier si le nom de société a changé et s'il existe déjà
+    if (companyData.name.trim() !== user.company.name) {
+      try {
+        const normalizedNewName = normalizeCompanyName(companyData.name);
+        const companiesQuery = query(collection(db, 'entreprises'));
+        const snapshot = await getDocs(companiesQuery);
+
+        for (const doc of snapshot.docs) {
+          // Ignorer notre propre entreprise
+          if (doc.id === user.companyId) continue;
+
+          const existingName = doc.data().name;
+          if (normalizeCompanyName(existingName) === normalizedNewName) {
+            alert('Ce nom de société est déjà utilisé par une autre entreprise. Veuillez choisir un autre nom.');
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors de la vérification du nom de société:', error);
+        alert('Erreur lors de la vérification du nom de société');
+        return;
+      }
+    }
+
     setIsSavingCompany(true);
     try {
       await updateCompanySettings({
