@@ -1,10 +1,8 @@
-// filepath: src/components/auth/Login.tsx
+// src/components/auth/Login.tsx
 import React, { useState } from 'react';
 import { Link, useLocation,useNavigate  } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
 import {
   Lock,
   Mail,
@@ -13,12 +11,11 @@ import {
   AlertCircle,
   CheckCircle,
   Eye,
+  
   EyeOff
 } from 'lucide-react';
 import { sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { auth } from '../../config/firebase';
-import { CASE_INSENSITIVE_COMPANY_NAMES } from '../../config/app';
-import { normalizeCompanyName } from '../../utils/text';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -75,13 +72,14 @@ export default function Login() {
         // ✅ Vérifier la vérification email après la connexion
         const user = auth.currentUser;
         if (user && !user.emailVerified) {
-          // WHY: ne pas laisser un compte non vérifié actif
+          // on évite de laisser l’utilisateur connecté
           await signOut(auth);
           setBannerError(
             "Votre email n'est pas encore vérifié. Veuillez vérifier votre boîte de réception et cliquer sur le lien de vérification."
           );
           return;
         }
+        // Si vérifié, tout est bon : pas de bannière d’erreur
       }
     } catch (err: any) {
       if (err?.message === 'ACCOUNT_BLOCKED_EXPIRED') {
@@ -267,7 +265,8 @@ export default function Login() {
 
 function RegisterForm({ onBack }: { onBack: () => void }) {
   const { register } = useAuth();
-  const navigate = useNavigate();
+    const navigate = useNavigate(); // ⬅️ ajouté
+
 
   const [isLoading, setIsLoading] = useState(false);
   const [bannerError, setBannerError] = useState('');
@@ -296,10 +295,9 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   // toggles mdp
   const [showPwd1, setShowPwd1] = useState(false);
   const [showPwd2, setShowPwd2] = useState(false);
-  const [isCheckingCompany, setIsCheckingCompany] = useState(false);
 
   const [formData, setFormData] = useState({
-    email: '',
+    email: '', // email de connexion
     password: '',
     confirmPassword: '',
     companyName: '',
@@ -310,7 +308,7 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     phone: '',
     address: '',
     logo: '',
-    companyEmail: '',
+    companyEmail: '', // email de l’entreprise
     patente: '',
     website: '',
   });
@@ -318,33 +316,6 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
   const onField = (name: keyof typeof formData, v: string) => {
     setFormData((s) => ({ ...s, [name]: v }));
     if (fieldErrors[name]) setFieldErrors((e) => ({ ...e, [name]: undefined }));
-  };
-
-  // Vérifier si le nom de société existe déjà (toggle sensibilité)
-  const checkCompanyNameExists = async (companyName: string): Promise<boolean> => {
-    try {
-      const raw = companyName.trim();
-      if (!raw) return false;
-      if (CASE_INSENSITIVE_COMPANY_NAMES) {
-        const norm = normalizeCompanyName(raw);
-        const companiesQuery = query(
-          collection(db, 'entreprises'),
-          where('nameNormalized', '==', norm)
-        );
-        const snapshot = await getDocs(companiesQuery);
-        return !snapshot.empty;
-      } else {
-        const companiesQuery = query(
-          collection(db, 'entreprises'),
-          where('name', '==', raw)
-        );
-        const snapshot = await getDocs(companiesQuery);
-        return !snapshot.empty;
-      }
-    } catch (error) {
-      console.error('Erreur lors de la vérification du nom de société:', error);
-      return false;
-    }
   };
 
   const validateRegister = () => {
@@ -381,41 +352,12 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     return Object.keys(fe).length === 0;
   };
 
-  const validateCompanyName = async () => {
-    if (!formData.companyName.trim()) {
-      setFieldErrors((e) => ({ ...e, companyName: 'Nom de la société obligatoire.' }));
-      return false;
-    }
-
-    setIsCheckingCompany(true);
-    try {
-      const exists = await checkCompanyNameExists(formData.companyName);
-      if (exists) {
-        setFieldErrors((e) => ({ 
-          ...e, 
-          companyName: 'Ce nom de société est déjà utilisé. Veuillez choisir un autre nom.' 
-        }));
-        return false;
-      }
-      return true;
-    } finally {
-      setIsCheckingCompany(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBannerError('');
 
     if (!validateRegister()) {
       setBannerError('Veuillez corriger les champs en rouge.');
-      return;
-    }
-
-    // Vérification spéciale du nom de société
-    const companyNameValid = await validateCompanyName();
-    if (!companyNameValid) {
-      setBannerError('Le nom de société est déjà utilisé ou invalide.');
       return;
     }
 
@@ -430,14 +372,14 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
         phone: formData.phone.trim(),
         address: formData.address.trim(),
         logo: formData.logo.trim(),
-        email: formData.companyEmail.trim(),
+        email: formData.companyEmail.trim(), // important
         patente: formData.patente.trim(),
         website: formData.website.trim(),
       };
 
       const ok = await register(formData.email.trim(), formData.password, companyData);
       if (ok) {
-        navigate(`/verify-email?email=${encodeURIComponent(formData.email.trim())}`, { replace: true });
+  navigate(`/verify-email?email=${encodeURIComponent(formData.email.trim())}`, { replace: true });
       } else {
         setBannerError('Erreur lors de la création du compte.');
       }
@@ -634,23 +576,9 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                         : 'border-gray-300 focus:ring-teal-500'
                     }`}
                   placeholder="Nom de votre entreprise"
-                  onBlur={async () => {
-                    if (formData.companyName.trim()) {
-                      await validateCompanyName();
-                    }
-                  }}
                 />
-                {isCheckingCompany && (
-                  <div className="mt-1 flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-teal-500 border-t-transparent"></div>
-                    <span className="text-xs text-teal-600">Vérification de la disponibilité...</span>
-                  </div>
-                )}
                 {fieldErrors.companyName && (
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.companyName}</p>
-                )}
-                {!fieldErrors.companyName && formData.companyName.trim() && !isCheckingCompany && (
-                  <p className="mt-1 text-xs text-green-600">✓ Nom de société disponible</p>
                 )}
               </div>
 
@@ -946,8 +874,8 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
             <div className="flex justify-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Lock className="w-8 h-8 text-white" />
+              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+                <CheckCircle className="w-8 h-8 text-white" />
               </div>
             </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">✅ Email envoyé !</h2>
@@ -977,7 +905,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
               </button>
               <button
                 onClick={onBack}
-                className="flex-1 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200"
+                className="flex-1 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200"
               >
                 Retour à la connexion
               </button>
@@ -1034,7 +962,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
-        {error && (
+          {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center space-x-2">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
               <span>{error}</span>
