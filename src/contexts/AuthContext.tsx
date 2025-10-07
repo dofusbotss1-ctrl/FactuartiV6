@@ -94,7 +94,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 /** Base URL pour la redirection après vérif email */
 const BASE_URL =
   import.meta.env.VITE_PUBLIC_BASE_URL ||
-  'https://factuartiv6-ukge.bolt.host';
+  'https://www.factourati.com/';
+
 
 const getActionCodeSettings = (): ActionCodeSettings => ({
   url: `${BASE_URL}/verify-email-success?mode=verifyEmail`,
@@ -340,6 +341,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (email: string, password: string, companyData: Company): Promise<boolean> => {
     try {
+      // Vérification finale du nom de société avant création
+      const companiesQuery = query(
+        collection(db, 'entreprises'),
+        where('name', '==', companyData.name.trim())
+      );
+      const existingCompanies = await getDocs(companiesQuery);
+      
+      if (!existingCompanies.empty) {
+        console.error('Nom de société déjà utilisé:', companyData.name);
+        return false;
+      }
+
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const userId = userCredential.user.uid;
 
