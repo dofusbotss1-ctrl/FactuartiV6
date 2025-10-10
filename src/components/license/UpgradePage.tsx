@@ -8,7 +8,7 @@ import {
   Shield, Headphones, Zap
 } from 'lucide-react';
 
-type BillingPeriod = 'monthly' | 'annual';
+type BillingPeriod = 'monthly' | 'sixMonths' | 'annual';
 
 interface UpgradePageProps {
   onClose: () => void;
@@ -21,7 +21,7 @@ export default function UpgradePage({ onClose, isRenewal = false }: UpgradePageP
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
 
-  const PRICES = { monthly: 300, annual: 3300 } as const;
+  const PRICES = { monthly: 500, sixMonths: 2500, annual: 5000 } as const;
 
   const handleUpgrade = () => setShowPaymentModal(true);
 
@@ -124,6 +124,14 @@ export default function UpgradePage({ onClose, isRenewal = false }: UpgradePageP
                   </button>
                   <button
                     type="button"
+                    aria-pressed={billingPeriod === 'sixMonths'}
+                    onClick={() => setBillingPeriod('sixMonths')}
+                    className={`px-4 py-2 rounded-full text-sm font-semibold transition ${billingPeriod === 'sixMonths' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                  >
+                    6 Mois
+                  </button>
+                  <button
+                    type="button"
                     aria-pressed={billingPeriod === 'annual'}
                     onClick={() => setBillingPeriod('annual')}
                     className={`px-4 py-2 rounded-full text-sm font-semibold transition ${billingPeriod === 'annual' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
@@ -142,10 +150,26 @@ export default function UpgradePage({ onClose, isRenewal = false }: UpgradePageP
                   </div>
                   <div className="mb-4">
                     <span className="text-4xl font-bold text-teal-600">
-                      {billingPeriod === 'monthly' ? `${PRICES.monthly} MAD` : `${PRICES.annual} MAD`}
+                      {billingPeriod === 'monthly' && `${PRICES.monthly} MAD`}
+                      {billingPeriod === 'sixMonths' && `${PRICES.sixMonths} MAD`}
+                      {billingPeriod === 'annual' && `${PRICES.annual} MAD`}
                     </span>
-                    <span className="text-gray-600 ml-2">/ {billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
+                    <span className="text-gray-600 ml-2">
+                      {billingPeriod === 'monthly' && '/ mois'}
+                      {billingPeriod === 'sixMonths' && '/ 6 mois'}
+                      {billingPeriod === 'annual' && '/ an'}
+                    </span>
                   </div>
+                  {billingPeriod === 'sixMonths' && (
+                    <div className="mb-4">
+                      <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">🎁 Un mois gratuit</span>
+                    </div>
+                  )}
+                  {billingPeriod === 'annual' && (
+                    <div className="mb-4">
+                      <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">🎁 Deux mois gratuits</span>
+                    </div>
+                  )}
                   <p className="text-gray-600 mb-6">Tout illimité + support prioritaire</p>
                   <div className="flex items-center justify-center space-x-6 text-sm text-gray-600 mb-6">
                     <div className="flex items-center space-x-1"><Check className="w-4 h-4 text-green-500" /><span>Factures illimitées</span></div>
@@ -174,7 +198,10 @@ export default function UpgradePage({ onClose, isRenewal = false }: UpgradePageP
                     <span className="flex items-center justify-center space-x-2">
                       <Crown className="w-5 h-5" />
                       <span>
-                        Payer maintenant - {billingPeriod === 'monthly' ? `${PRICES.monthly} MAD/mois` : `${PRICES.annual} MAD/an`}
+                        Payer maintenant -
+                        {billingPeriod === 'monthly' && `${PRICES.monthly} MAD/mois`}
+                        {billingPeriod === 'sixMonths' && `${PRICES.sixMonths} MAD/6 mois`}
+                        {billingPeriod === 'annual' && `${PRICES.annual} MAD/an`}
                       </span>
                     </span>
                   )}

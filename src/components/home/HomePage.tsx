@@ -46,12 +46,14 @@ export default function HomePage() {
     show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } }
   };
 
-  // Toggle Mensuel/Annuel
-  const [billingPeriod, setBillingPeriod] = React.useState<'monthly' | 'annual'>('monthly');
-  const PRICES = { monthly: 300, annual: 3300 } as const;
+  // Toggle Mensuel/6 mois/Annuel
+  const [billingPeriod, setBillingPeriod] = React.useState<'monthly' | 'sixMonths' | 'annual'>('monthly');
+  const PRICES = { monthly: 500, sixMonths: 2500, annual: 5000 } as const;
   const monthlyTotal = PRICES.monthly * 12;
-  const savings = monthlyTotal - PRICES.annual;
-  const savingsPct = Math.round((savings / monthlyTotal) * 100);
+  const sixMonthsMonthlyEquiv = PRICES.sixMonths / 6;
+  const annualMonthlyEquiv = PRICES.annual / 12;
+  const sixMonthsSavings = (PRICES.monthly * 6) - PRICES.sixMonths;
+  const annualSavings = monthlyTotal - PRICES.annual;
 
   return (
     // ⬇ Wrapper sticky footer
@@ -422,6 +424,14 @@ export default function HomePage() {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={billingPeriod === 'sixMonths'}
+                  onClick={() => setBillingPeriod('sixMonths')}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold transition ${billingPeriod === 'sixMonths' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                >
+                  6 Mois
+                </button>
+                <button
+                  type="button"
                   aria-pressed={billingPeriod === 'annual'}
                   onClick={() => setBillingPeriod('annual')}
                   className={`px-4 py-2 rounded-full text-sm font-semibold transition ${billingPeriod === 'annual' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
@@ -476,11 +486,20 @@ export default function HomePage() {
                 <div className="text-center mb-8">
                   <h3 className="text-2xl font-bold mb-1">Pro</h3>
                   <div className="text-4xl font-bold mb-1">
-                    {billingPeriod === 'monthly' ? `${PRICES.monthly} MAD` : `${PRICES.annual} MAD`}
+                    {billingPeriod === 'monthly' && `${PRICES.monthly} MAD`}
+                    {billingPeriod === 'sixMonths' && `${PRICES.sixMonths} MAD`}
+                    {billingPeriod === 'annual' && `${PRICES.annual} MAD`}
                   </div>
-                  <p className="opacity-90">{billingPeriod === 'monthly' ? 'par mois' : 'par an'}</p>
+                  <p className="opacity-90">
+                    {billingPeriod === 'monthly' && 'par mois'}
+                    {billingPeriod === 'sixMonths' && 'pour 6 mois'}
+                    {billingPeriod === 'annual' && 'par an'}
+                  </p>
+                  {billingPeriod === 'sixMonths' && (
+                    <p className="mt-2 text-sm text-yellow-100">🎁 Un mois gratuit</p>
+                  )}
                   {billingPeriod === 'annual' && (
-                    <p className="mt-2 text-sm text-yellow-100">🎉 Économisez {savings} MAD/an (~{savingsPct}%)</p>
+                    <p className="mt-2 text-sm text-yellow-100">🎁 Deux mois gratuits</p>
                   )}
                 </div>
                 <ul className="space-y-3 mb-8">
