@@ -15,7 +15,7 @@ export default function PaymentModal({ isOpen, onClose, onComplete, isRenewal = 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const PRICES = { monthly: 500, sixMonths:2500, annual: 5500 } as const;
+  const PRICES = { monthly: 500, sixMonths:2500, annual: 5000 } as const;
   const amount = PRICES[billingPeriod];
 
   const bankInfo = {
@@ -182,7 +182,7 @@ export default function PaymentModal({ isOpen, onClose, onComplete, isRenewal = 
               </button>
 
               <div className="mt-6">
-                <p className="text-sm text-gray-500">📞 Support : +212 666 736 446 • 📧 support@facturati.ma</p>
+                <p className="text-sm text-gray-500">📞 Support : +212 666 736 446 • 📧 support@factourati.com</p>
               </div>
             </div>
           )}
