@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, CreditCard, MessageCircle, Check, Sparkles, Copy, CheckCircle } from 'lucide-react';
 
-type BillingPeriod = 'monthly' | 'annual';
+type BillingPeriod = 'monthly'| 'sixMonths' | 'annual';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -15,7 +15,7 @@ export default function PaymentModal({ isOpen, onClose, onComplete, isRenewal = 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const PRICES = { monthly: 500, annual: 5500 } as const;
+  const PRICES = { monthly: 500, sixMonths:2500, annual: 5500 } as const;
   const amount = PRICES[billingPeriod];
 
   const bankInfo = {
