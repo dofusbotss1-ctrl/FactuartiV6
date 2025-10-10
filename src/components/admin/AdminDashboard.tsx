@@ -15,6 +15,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import EditCompanyModal from './EditCompanyModal';
+import ReferralSourceChart from './ReferralSourceChart';
 
 interface Company {
   id: string;
@@ -25,6 +26,9 @@ interface Company {
   ownerEmail: string;
   ice: string;
   createdAt: string;
+  referralSource?: string;
+  accountantName?: string;
+  otherSource?: string;
 }
 
 export default function AdminDashboard() {
@@ -127,11 +131,25 @@ export default function AdminDashboard() {
     total: companies.length,
     free: companies.filter(c => c.subscription === 'free').length,
     pro: companies.filter(c => c.subscription === 'pro').length,
-    expired: companies.filter(c => 
-      c.subscription === 'pro' && 
-      c.expiryDate && 
+    expired: companies.filter(c =>
+      c.subscription === 'pro' &&
+      c.expiryDate &&
       new Date(c.expiryDate) < new Date()
     ).length
+  };
+
+  const referralSourceData = () => {
+    const sourceCounts: { [key: string]: number } = {};
+
+    companies.forEach(company => {
+      const source = company.referralSource || 'Non spécifié';
+      sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+    });
+
+    return Object.entries(sourceCounts).map(([source, count]) => ({
+      source,
+      count
+    }));
   };
 
   if (isLoading) {
@@ -230,6 +248,11 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* Diagramme des sources d'acquisition */}
+        <div className="mb-8">
+          <ReferralSourceChart data={referralSourceData()} />
+        </div>
+
         {/* Liste des entreprises */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -245,6 +268,9 @@ export default function AdminDashboard() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Email Propriétaire
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Source d'Acquisition
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Type d'Abonnement
@@ -271,6 +297,17 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {company.ownerEmail}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div>
+                        <div className="font-medium">{company.referralSource || 'Non spécifié'}</div>
+                        {company.referralSource === 'Bureau Comptable' && company.accountantName && (
+                          <div className="text-xs text-gray-500 mt-1">{company.accountantName}</div>
+                        )}
+                        {company.referralSource === 'Autre' && company.otherSource && (
+                          <div className="text-xs text-gray-500 mt-1">{company.otherSource}</div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
