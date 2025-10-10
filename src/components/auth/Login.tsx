@@ -289,7 +289,9 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     | 'logo'
     | 'companyEmail'
     | 'patente'
-    | 'website',
+    | 'website'
+    | 'referralSource'
+    | 'accountantName',
     string
   >>;
   const [fieldErrors, setFieldErrors] = useState<FE>({});
@@ -311,9 +313,12 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     phone: '',
     address: '',
     logo: '',
-    companyEmail: '', // email de l’entreprise
+    companyEmail: '', // email de l'entreprise
     patente: '',
     website: '',
+    referralSource: '',
+    accountantName: '',
+    otherSource: '',
   });
 
   const onField = (name: keyof typeof formData, v: string) => {
@@ -371,6 +376,10 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
     else if (!/^(\+212|0)[5-7]\d{8}$/.test(formData.phone.replace(/\s/g, '')))
       fe.phone = 'Numéro marocain invalide (ex: +212 6 12 34 56 78).';
 
+    if (!formData.referralSource) fe.referralSource = 'Veuillez sélectionner une option.';
+    if (formData.referralSource === 'Bureau Comptable' && !formData.accountantName.trim())
+      fe.accountantName = 'Nom du bureau comptable obligatoire.';
+
     setFieldErrors(fe);
     return Object.keys(fe).length === 0;
   };
@@ -427,6 +436,9 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
         email: formData.companyEmail.trim(), // important
         patente: formData.patente.trim(),
         website: formData.website.trim(),
+        referralSource: formData.referralSource,
+        accountantName: formData.referralSource === 'Bureau Comptable' ? formData.accountantName.trim() : '',
+        otherSource: formData.referralSource === 'Autre' ? formData.otherSource.trim() : '',
       };
 
       const ok = await register(formData.email.trim(), formData.password, companyData);
@@ -877,6 +889,90 @@ function RegisterForm({ onBack }: { onBack: () => void }) {
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.address}</p>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Comment nous avez-vous trouvé */}
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Comment nous avez-vous trouvé ?</h3>
+            <div className="space-y-4">
+              {/* Source de référence */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Source *</label>
+                <select
+                  name="referralSource"
+                  value={formData.referralSource}
+                  onChange={(e) => {
+                    onField('referralSource', e.target.value);
+                    if (e.target.value !== 'Bureau Comptable') {
+                      onField('accountantName', '');
+                    }
+                    if (e.target.value !== 'Autre') {
+                      onField('otherSource', '');
+                    }
+                  }}
+                  required
+                  aria-invalid={!!fieldErrors.referralSource}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent
+                    ${
+                      fieldErrors.referralSource
+                        ? 'border-red-300 focus:ring-red-400'
+                        : 'border-gray-300 focus:ring-teal-500'
+                    }`}
+                >
+                  <option value="">Sélectionnez une option</option>
+                  <option value="Bureau Comptable">Bureau Comptable</option>
+                  <option value="Google">Google</option>
+                  <option value="Facebook">Facebook</option>
+                  <option value="Instagram">Instagram</option>
+                  <option value="YouTube">YouTube</option>
+                  <option value="Autre">Autre</option>
+                </select>
+                {fieldErrors.referralSource && (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.referralSource}</p>
+                )}
+              </div>
+
+              {/* Nom du bureau comptable (affiché seulement si Bureau Comptable est sélectionné) */}
+              {formData.referralSource === 'Bureau Comptable' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Nom du bureau comptable *</label>
+                  <input
+                    type="text"
+                    name="accountantName"
+                    value={formData.accountantName}
+                    onChange={(e) => onField('accountantName', e.target.value)}
+                    required
+                    aria-invalid={!!fieldErrors.accountantName}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent
+                      ${
+                        fieldErrors.accountantName
+                          ? 'border-red-300 focus:ring-red-400'
+                          : 'border-gray-300 focus:ring-teal-500'
+                      }`}
+                    placeholder="Nom du bureau comptable"
+                  />
+                  {fieldErrors.accountantName && (
+                    <p className="mt-1 text-xs text-red-600">{fieldErrors.accountantName}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Autre source (affiché seulement si Autre est sélectionné) */}
+              {formData.referralSource === 'Autre' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Précisez (optionnel)</label>
+                  <input
+                    type="text"
+                    name="otherSource"
+                    value={formData.otherSource}
+                    onChange={(e) => onField('otherSource', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    placeholder="Veuillez préciser"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Optionnel</p>
+                </div>
+              )}
             </div>
           </div>
 
