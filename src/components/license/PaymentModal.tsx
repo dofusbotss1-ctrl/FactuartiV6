@@ -15,7 +15,7 @@ export default function PaymentModal({ isOpen, onClose, onComplete, isRenewal = 
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const PRICES = { monthly: 500, sixMonths:2500, annual: 5000 } as const;
+  const PRICES = { monthly: 499, sixMonths:2499, annual: 4999 } as const;
   const amount = PRICES[billingPeriod];
 
   const bankInfo = {
