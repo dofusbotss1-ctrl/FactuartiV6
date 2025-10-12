@@ -31,7 +31,12 @@ import {
   Monitor,
   Megaphone,
   Grid2x2,
-  Cog
+  Cog,
+  Facebook,
+  Instagram,
+  Linkedin,
+  Youtube,
+  Twitter
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -668,7 +673,7 @@ export default function HomePage() {
               <p className="text-gray-400 mb-6 max-w-md">
                 La solution marocaine qui réunit devis, factures, stock, fournisseurs, projets et équipe — pour travailler plus vite et plus sereinement.
               </p>
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4 mb-6">
                 <div className="flex items-center space-x-2 text-gray-400">
                   <Phone className="w-4 h-4" />
                   <span>+212 666 736 446</span>
@@ -676,6 +681,58 @@ export default function HomePage() {
                 <div className="flex items-center space-x-2 text-gray-400">
                   <Mail className="w-4 h-4" />
                   <span>contact@Factourati.com</span>
+                </div>
+              </div>
+
+              {/* Réseaux sociaux */}
+              <div>
+                <h4 className="font-semibold mb-3 text-white">Suivez-nous</h4>
+                <div className="flex items-center space-x-4">
+                  <a
+                    href="https://www.facebook.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-gray-800 hover:bg-blue-600 rounded-lg flex items-center justify-center transition-colors"
+                    aria-label="Facebook"
+                  >
+                    <Facebook className="w-5 h-5" />
+                  </a>
+                  <a
+                    href="https://www.instagram.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-gray-800 hover:bg-pink-600 rounded-lg flex items-center justify-center transition-colors"
+                    aria-label="Instagram"
+                  >
+                    <Instagram className="w-5 h-5" />
+                  </a>
+                  <a
+                    href="https://www.twitter.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-gray-800 hover:bg-sky-500 rounded-lg flex items-center justify-center transition-colors"
+                    aria-label="Twitter/X"
+                  >
+                    <Twitter className="w-5 h-5" />
+                  </a>
+                  <a
+                    href="https://www.linkedin.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-gray-800 hover:bg-blue-700 rounded-lg flex items-center justify-center transition-colors"
+                    aria-label="LinkedIn"
+                  >
+                    <Linkedin className="w-5 h-5" />
+                  </a>
+                  <a
+                    href="https://www.youtube.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-gray-800 hover:bg-red-600 rounded-lg flex items-center justify-center transition-colors"
+                    aria-label="YouTube"
+                  >
+                    <Youtube className="w-5 h-5" />
+                  </a>
                 </div>
               </div>
             </div>
