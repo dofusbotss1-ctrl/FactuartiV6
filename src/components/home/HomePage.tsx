@@ -53,7 +53,7 @@ export default function HomePage() {
 
   // Toggle Mensuel/6 mois/Annuel
   const [billingPeriod, setBillingPeriod] = React.useState<'monthly' | 'sixMonths' | 'annual'>('monthly');
-  const PRICES = { monthly: 500, sixMonths: 2500, annual: 5000 } as const;
+  const PRICES = { monthly: 499, sixMonths: 2499, annual: 4999 } as const;
   const monthlyTotal = PRICES.monthly * 12;
   const sixMonthsMonthlyEquiv = PRICES.sixMonths / 6;
   const annualMonthlyEquiv = PRICES.annual / 12;
