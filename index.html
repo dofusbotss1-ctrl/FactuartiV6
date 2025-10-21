@@ -5,10 +5,9 @@
     <meta charset="UTF-8" />
 
     <!-- Favicon / PWA icons -->
-    <!-- Idéal: héberger le logo sur TON domaine (mieux pour Google) -->
-    <link rel="icon" type="image/png" sizes="32x32" href="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png">
-    <link rel="apple-touch-icon" href="https://www.factourati.com/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/image copy.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/image copy.png">
+    <link rel="apple-touch-icon" href="/image copy.png">
 
     <!-- Viewport: version SEO/mobile-friendly -->
     <meta name="viewport" content="width=1024, initial-scale=0.3, maximum-scale=0.8, user-scalable=yes" />
@@ -35,8 +34,8 @@
       "@type": "Organization",
       "name": "Factourati",
       "url": "https://www.factourati.com",
-      "logo": "https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png",
-      "image": "https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png",
+      "logo": "https://www.factourati.com/image copy.png",
+      "image": "https://www.factourati.com/image copy.png",
       "sameAs": [
         "https://x.com/FacTourati",
         "https://www.linkedin.com/company/factourati",
@@ -61,7 +60,7 @@
     }
     </script>
 
-    <!-- JSON-LD: WebPage (page d'accueil) -->
+    <!-- JSON-LD: WebPage avec sections de navigation -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -69,7 +68,77 @@
       "name": "Factourati — Solution ERP Marocaine",
       "url": "https://www.factourati.com/",
       "description": "ERP marocain pour devis, factures, paiements, stock, fournisseurs, projets et RH.",
-      "isPartOf": { "@type": "WebSite", "url": "https://www.factourati.com" }
+      "isPartOf": { "@type": "WebSite", "url": "https://www.factourati.com" },
+      "mainEntity": {
+        "@type": "ItemList",
+        "itemListElement": [
+          {
+            "@type": "SiteNavigationElement",
+            "position": 1,
+            "name": "Accueil",
+            "url": "https://www.factourati.com/#accueil"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 2,
+            "name": "Secteurs",
+            "url": "https://www.factourati.com/#secteurs"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 3,
+            "name": "Modules",
+            "url": "https://www.factourati.com/#modules"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 4,
+            "name": "Tarifs",
+            "url": "https://www.factourati.com/#tarifs"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 5,
+            "name": "FAQ",
+            "url": "https://www.factourati.com/#faq"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 6,
+            "name": "Connexion",
+            "url": "https://www.factourati.com/login"
+          },
+          {
+            "@type": "SiteNavigationElement",
+            "position": 7,
+            "name": "Essai 1 mois gratuit",
+            "url": "https://www.factourati.com/login?mode=register"
+          }
+        ]
+      }
+    }
+    </script>
+
+    <!-- JSON-LD: SoftwareApplication pour affichage app -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Factourati",
+      "url": "https://www.factourati.com",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "MAD",
+        "description": "1 mois d'essai gratuit"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "5",
+        "ratingCount": "1000"
+      }
     }
     </script>
 
