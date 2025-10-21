@@ -70,7 +70,7 @@ export default function HomePage() {
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-br from-black-200 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
                 <img
-                  src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
+                  src="https://www.factourati.com/files_3254075-1761082431431-image.png"
                   alt="Factourati Logo"
                   className="w-10 h-10 object-contain"
                 />
@@ -183,7 +183,7 @@ export default function HomePage() {
 
                       <div className="w-10 h-10 bg-gradient-to-br rounded-lg">
                         <img
-                          src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
+                          src="https://www.factourati.com/files_3254075-1761082431431-image.png"
                           alt="Factourati Logo"
                           className="w-10 h-10 object-contain"
                         />
@@ -660,7 +660,7 @@ export default function HomePage() {
               <div className="flex items-center space-x-3 mb-4">
                 <div className="w-8 h-8 bg-gradient-to-br from-black-200 to-red-600  rounded-lg flex items-center justify-center shadow-lg">
                   <img
-                    src="https://i.ibb.co/kgVKRM9z/20250915-1327-Conception-Logo-Color-remix-01k56ne0szey2vndspbkzvezyp-1.png"
+                    src="https://www.factourati.com/files_3254075-1761082431431-image.png"
                     alt="Factourati Logo"
                     className="w-8 h-8 object-contain"
                   />
