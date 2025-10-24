@@ -71,8 +71,12 @@ export default function HomePage() {
               <div className="w-10 h-10 bg-gradient-to-br from-black-200 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
                 <img
                   src="https://www.factourati.com/files_3254075-1761082431431-image.png"
-                  alt="Factourati Logo"
+                  alt="Logo Factourati - Solution ERP Marocaine pour gestion d'entreprise"
+                  title="Factourati - ERP Maroc"
+                  width="40"
+                  height="40"
                   className="w-10 h-10 object-contain"
+                  itemProp="logo"
                 />
               </div>
 
@@ -137,7 +141,7 @@ export default function HomePage() {
                 </span>
               </motion.div>
 
-              <motion.h1 variants={fadeUp} className="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-6 leading-tight">
+              <motion.h1 variants={fadeUp} className="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-6 leading-tight" itemProp="headline">
                 Factourati — <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600">Gérez votre entreprise plus vite, plus simplement</span>
               </motion.h1>
 
@@ -184,7 +188,10 @@ export default function HomePage() {
                       <div className="w-10 h-10 bg-gradient-to-br rounded-lg">
                         <img
                           src="https://www.factourati.com/files_3254075-1761082431431-image.png"
-                          alt="Factourati Logo"
+                          alt="Factourati Dashboard - Interface ERP"
+                          title="Factourati Dashboard"
+                          width="40"
+                          height="40"
                           className="w-10 h-10 object-contain"
                         />
                       </div>
@@ -661,8 +668,12 @@ export default function HomePage() {
                 <div className="w-8 h-8 bg-gradient-to-br from-black-200 to-red-600  rounded-lg flex items-center justify-center shadow-lg">
                   <img
                     src="https://www.factourati.com/files_3254075-1761082431431-image.png"
-                    alt="Factourati Logo"
+                    alt="Logo Factourati - ERP Morocco"
+                    title="Factourati - Gestion d'entreprise"
+                    width="32"
+                    height="32"
                     className="w-8 h-8 object-contain"
+                    itemProp="logo"
                   />
                 </div>
                 <div>
